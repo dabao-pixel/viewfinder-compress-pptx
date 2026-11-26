@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nén PPTX cho Google Slides</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one centered working column — drop zone, settings, live progress, result. */
+:root {
+  --bg: #f3f5f4; --surface: #ffffff; --fg: #18201d; --muted: #5c6863;
+  --line: #d7ddda; --accent: #0f6b55; --accent-fg: #ffffff; --accent-soft: #e1efea;
+  --warn: #9a5b00; --warn-soft: #fbf0dc; --bad: #a3271f; --bad-soft: #f8e3e1;
+  --font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121715; --surface: #1a211e; --fg: #e6ece9; --muted: #98a59f;
+  --line: #2c3632; --accent: #4cc2a0; --accent-fg: #0b1512; --accent-soft: #1d3630;
+  --warn: #e7b25c; --warn-soft: #3a2e1a; --bad: #f08a80; --bad-soft: #3d2120; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #121715; --surface: #1a211e; --fg: #e6ece9; --muted: #98a59f;
+  --line: #2c3632; --accent: #4cc2a0; --accent-fg: #0b1512; --accent-soft: #1d3630;
+  --warn: #e7b25c; --warn-soft: #3a2e1a; --bad: #f08a80; --bad-soft: #3d2120; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 720px; margin: 0 auto; padding-block: 40px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 24px; }
+h1 { font-size: 1.9rem; line-height: 1.2; margin: 0; font-weight: 700; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-size: 1rem; margin: 0; font-weight: 600; }
+.lede { margin: 8px 0 0; color: var(--muted); max-width: 60ch; }
+.limit { font-family: var(--mono); font-size: .8rem; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
+
+.drop { border: 2px dashed var(--line); border-radius: 14px; background: var(--surface); padding: 36px 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.drop .big { font-size: 1.1rem; font-weight: 600; }
+.drop .small { color: var(--muted); font-size: .9rem; }
+.drop svg { width: 40px; height: 40px; color: var(--accent); }
+
+.settings { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; color: var(--muted); font-size: .9rem; }
+.settings label { display: flex; align-items: center; gap: 8px; }
+.settings input { width: 72px; font: inherit; font-family: var(--mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.fname { font-weight: 600; word-break: break-word; }
+.sizes { display: flex; flex-wrap: wrap; gap: 8px 24px; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: .95rem; }
+.sizes span b { font-weight: 600; }
+.bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.status { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: .8rem; font-weight: 600; }
+.pill.ok { background: var(--accent-soft); color: var(--accent); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.msg { margin: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+button { font: inherit; font-weight: 600; border-radius: 10px; padding: 10px 18px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: default; }
+a.dl { display: inline-block; text-decoration: none; font-weight: 600; border-radius: 10px; padding: 10px 18px; background: var(--accent); color: var(--accent-fg); }
+[hidden] { display: none !important; }
+body { margin: 0; }
+
+.steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+.notes { color: var(--muted); font-size: .88rem; display: flex; flex-direction: column; gap: 6px; }
+.notes p { margin: 0; }
+details summary { cursor: pointer; font-weight: 600; }
+.mono { font-family: var(--mono); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="limit">Giới hạn Google Slides: 100 MB</div>
+    <h1>Nén PPTX để mở bằng Google Slides</h1>
+    <p class="lede">Chọn file PowerPoint quá nặng. Trang này thu nhỏ ảnh bên trong cho đến khi file còn dưới mức bạn đặt, rồi trả lại file .pptx để tải lên Google Drive. Chữ, bố cục và số slide giữ nguyên.</p>
+  </header>
+
+  <div id="drop" class="drop" tabindex="0" role="button" aria-label="Chọn file PPTX">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+    <div class="big">Kéo file .pptx vào đây</div>
+    <div class="small">hoặc bấm để chọn file · file được xử lý ngay trên máy bạn, không gửi đi đâu</div>
+    <input id="file" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
+  </div>
+
+  <div class="settings">
+    <label for="target">Nén xuống dưới <input id="target" type="number" min="10" max="500" step="1" value="95"> MB</label>
+    <span>Để 95 MB là an toàn cho Google Slides.</span>
+  </div>
+
+  <section id="job" class="panel" hidden aria-live="polite">
+    <div class="fname" id="fname"></div>
+    <div class="sizes">
+      <span>Gốc: <b id="sizeIn">–</b></span>
+      <span>Sau nén: <b id="sizeOut">–</b></span>
+      <span id="badge"></span>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="status" id="status"></div>
+    <p class="msg" id="msg" hidden></p>
+    <div class="actions">
+      <button class="primary" id="save" hidden>Tải file đã nén</button>
+      <a class="dl" id="fallback" hidden>Tải file đã nén</a>
+      <button id="again" hidden>Nén file khác</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Sau khi tải file về</h2>
+    <ol class="steps">
+      <li>Mở <span class="mono">drive.google.com</span> và kéo file đã nén vào.</li>
+      <li>Chuột phải vào file → <b>Mở bằng</b> → <b>Google Trang trình bày</b>.</li>
+      <li>Google tạo bản Slides mới. Copy link trên thanh địa chỉ để gửi, hoặc chọn slide rồi Cmd/Ctrl+C để dán sang deck khác.</li>
+    </ol>
+  </section>
+
+  <details class="notes">
+    <summary>Trang này làm gì với file</summary>
+    <p>Ảnh trong slide được thu nhỏ dần theo từng mức (cạnh dài 2560 → 1920 → 1600 → 1280 → 1024 → 800 px) cho đến khi file đủ nhẹ. Dừng ở mức nhẹ tay nhất là đủ.</p>
+    <p>Ảnh PNG không có nền trong suốt được đổi sang JPEG cho nhẹ. Ảnh PNG có nền trong suốt vẫn giữ PNG.</p>
+    <p>Video, âm thanh và font nhúng không nén được. Nếu file vẫn quá nặng vì video, trang sẽ báo để bạn bỏ bớt video trong PowerPoint.</p>
+    <p>Chỉ nhận .pptx. File .ppt đời cũ cần mở bằng PowerPoint và lưu lại dạng .pptx trước.</p>
+  </details>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const MB = 1e6;
+  const TIERS = [
+    { max: 2560, q: 0.88 }, { max: 1920, q: 0.82 }, { max: 1600, q: 0.78 },
+    { max: 1280, q: 0.72 }, { max: 1024, q: 0.66 }, { max: 800, q: 0.6 }
+  ];
+  const MIN_BYTES = 150 * 1024; // skip images already small
+  let downloadsP = null;
+  try { downloadsP = window.claude && window.claude.use ? window.claude.use("downloads") : Promise.resolve(null); } catch { downloadsP = Promise.resolve(null); }
+
+  let busy = false, result = null, fallbackUrl = null;
+  const fmt = b => (b / MB).toFixed(1) + " MB";
+
+  const drop = $("drop"), input = $("file");
+  drop.addEventListener("click", () => !busy && input.click());
+  drop.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && !busy) { e.preventDefault(); input.click(); } });
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f && !busy) run(f); });
+  input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; if (f && !busy) run(f); });
+  $("again").addEventListener("click", () => { $("job").hidden = true; drop.focus(); });
+  $("save").addEventListener("click", save);
+
+  function setProgress(frac, text) { $("barFill").style.width = Math.round(frac * 100) + "%"; $("status").textContent = text; }
+  function badge(kind, text) { const b = $("badge"); b.className = "pill " + kind; b.textContent = text; }
+  function message(text) { const m = $("msg"); m.textContent = text; m.hidden = !text; }
+
+  function reset(file) {
+    result = null;
+    if (fallbackUrl) { URL.revokeObjectURL(fallbackUrl); fallbackUrl = null; }
+    $("job").hidden = false; $("fname").textContent = file.name;
+    $("sizeIn").textContent = fmt(file.size); $("sizeOut").textContent = "–";
+    $("badge").className = ""; $("badge").textContent = "";
+    $("save").hidden = true; $("fallback").hidden = true; $("again").hidden = true; message("");
+    setProgress(0, "Đang đọc file…");
+  }
+
+  async function encode(blob, isPng, tier) {
+    const bmp = await createImageBitmap(blob);
+    const { width: w, height: h } = bmp;
+    const scale = Math.min(1, tier.max / Math.max(w, h));
+    const W = Math.max(1, Math.round(w * scale)), H = Math.max(1, Math.round(h * scale));
+    let alpha = false;
+    if (isPng) {
+      const s = Math.min(1, 512 / Math.max(w, h));
+      const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
+      const cx = c.getContext("2d", { willReadFrequently: true }); cx.drawImage(bmp, 0, 0, c.width, c.height);
+      const d = cx.getImageData(0, 0, c.width, c.height).data;
+      for (let i = 3; i < d.length; i += 4) if (d[i] < 250) { alpha = true; break; }
+    }
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const cx = c.getContext("2d");
+    if (!alpha) { cx.fillStyle = "#fff"; cx.fillRect(0, 0, W, H); }
+    cx.imageSmoothingQuality = "high";
+    cx.drawImage(bmp, 0, 0, W, H); bmp.close();
+    const type = alpha ? "image/png" : "image/jpeg";
+    const out = await new Promise(r => c.toBlob(r, type, tier.q));
+    c.width = c.height = 0;
+    return { blob: out, jpeg: !alpha };
+  }
+
+  async function run(file) {
+    if (!/\.pptx$/i.test(file.name)) { reset(file); setProgress(0, ""); badge("bad", "Sai định dạng"); message("Trang này chỉ nhận file .pptx. Với file .ppt, mở bằng PowerPoint và lưu lại dạng .pptx trước."); $("again").hidden = false; return; }
+    if (typeof JSZip === "undefined") { reset(file); badge("bad", "Lỗi"); message("Không tải được thư viện đọc file. Kiểm tra mạng rồi tải lại trang."); return; }
+    busy = true; reset(file);
+    const target = Math.max(10, Number($("target").value) || 95) * MB;
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const names = Object.keys(zip.files).filter(n => !zip.files[n].dir);
+      const media = names.filter(n => /^ppt\/media\//i.test(n));
+      const imgs = [], others = [];
+      for (const n of media) {
+        const size = zip.files[n]._data && zip.files[n]._data.uncompressedSize || 0;
+        if (/\.(png|jpe?g)$/i.test(n)) imgs.push({ name: n, size }); else others.push({ name: n, size });
+      }
+      if (file.size <= target) {
+        setProgress(1, "");
+        badge("ok", "Đã đủ nhẹ"); $("sizeOut").textContent = fmt(file.size);
+        message(`File chỉ ${fmt(file.size)}, đã dưới ${fmt(target)}. Tải thẳng file gốc lên Google Drive là được.`);
+        $("again").hidden = false; busy = false; return;
+      }
+      const cands = imgs.filter(i => i.size >= MIN_BYTES).sort((a, b) => b.size - a.size);
+      const blobs = {};
+      for (const c of cands) blobs[c.name] = await zip.files[c.name].async("blob");
+      const existing = new Set(names.map(n => n.toLowerCase()));
+      let final = null, lastSize = 0;
+
+      for (let t = 0; t < TIERS.length; t++) {
+        const tier = TIERS[t], repl = {};
+        let saved = 0;
+        for (let i = 0; i < cands.length; i++) {
+          const c = cands[i];
+          setProgress((t + i / cands.length) / TIERS.length, `Mức ${t + 1}/${TIERS.length} · ảnh tối đa ${tier.max}px · đang nén ảnh ${i + 1}/${cands.length}`);
+          const isPng = /\.png$/i.test(c.name);
+          let r;
+          try { r = await encode(blobs[c.name], isPng, tier); } catch { continue; }
+          if (!r.blob || r.blob.size >= c.size) continue;
+          let newName = c.name;
+          if (isPng && r.jpeg) {
+            const base = c.name.replace(/\.png$/i, "");
+            newName = base + ".jpeg";
+            let k = 1; while (existing.has(newName.toLowerCase())) newName = `${base}_${k++}.jpeg`;
+          }
+          repl[c.name] = { newName, blob: r.blob };
+          saved += c.size - r.blob.size;
+        }
+        const estimate = file.size - saved;
+        if (estimate > target * 1.02 && t < TIERS.length - 1) continue;
+        setProgress((t + 1) / TIERS.length, `Mức ${t + 1}: đang đóng gói file…`);
+        const out = await build(zip, names, repl, p => setProgress((t + 0.5 + p / 2) / TIERS.length, `Mức ${t + 1}: đang đóng gói file… ${Math.round(p * 100)}%`));
+        lastSize = out.size;
+        $("sizeOut").textContent = fmt(out.size);
+        if (out.size <= target) { final = { blob: out, tier: t }; break; }
+        if (t === TIERS.length - 1) final = { blob: out, tier: t, over: true };
+      }
+
+      result = { blob: final.blob, name: file.name.replace(/\.pptx$/i, "") + " (nén).pptx" };
+      setProgress(1, "");
+      if (final.over) {
+        const bigOthers = others.filter(o => o.size > 2 * MB).sort((a, b) => b.size - a.size).slice(0, 5);
+        const vids = bigOthers.length ? ` Phần nặng còn lại không phải ảnh: ${bigOthers.map(o => o.name.split("/").pop() + " (" + fmt(o.size) + ")").join(", ")}. Hãy xoá hoặc nén các video/âm thanh này trong PowerPoint rồi thử lại.` : "";
+        badge("warn", "Vẫn còn nặng");
+        message(`Đã nén ảnh hết mức nhưng file vẫn ${fmt(lastSize)}, trên ${fmt(target)}.${vids}`);
+      } else {
+        badge("ok", `Giảm ${Math.round((1 - final.blob.size / file.size) * 100)}%`);
+        message(final.tier <= 1 ? "Xong. Ảnh chỉ thu nhỏ nhẹ, trình chiếu gần như không khác bản gốc." : `Xong. Ảnh được thu nhỏ về tối đa ${TIERS[final.tier].max}px. Trình chiếu vẫn ổn, nhưng phóng to sẽ thấy kém nét hơn bản gốc.`);
+      }
+      await offerSave();
+    } catch (e) {
+      console.error(e);
+      badge("bad", "Không đọc được file");
+      message("File có thể bị hỏng hoặc không phải PPTX thật. Thử mở bằng PowerPoint, lưu lại, rồi chọn lại file.");
+    } finally { busy = false; $("again").hidden = false; }
+  }
+
+  async function build(zip, names, repl, onProgress) {
+    const out = new JSZip();
+    const renames = Object.entries(repl).filter(([o, r]) => r.newName !== o);
+    for (const n of names) {
+      const e = zip.files[n];
+      if (repl[n]) { out.file(repl[n].newName, repl[n].blob, { compression: "STORE" }); continue; }
+      if (renames.length && /\.rels$/i.test(n)) {
+        let txt = await e.async("string"), changed = false;
+        for (const [o, r] of renames) {
+          const from = "/" + o.split("/").pop() + '"', to = "/" + r.newName.split("/").pop() + '"';
+          if (txt.includes("media" + from)) { txt = txt.split("media" + from).join("media" + to); changed = true; }
+        }
+        out.file(n, changed ? txt : e.async("uint8array"));
+        continue;
+      }
+      if (renames.length && n === "[Content_Types].xml") {
+        let txt = await e.async("string");
+        if (!/Extension="jpeg"/i.test(txt)) txt = txt.replace(/(<Types[^>]*>)/, '$1<Default Extension="jpeg" ContentType="image/jpeg"/>');
+        out.file(n, txt); continue;
+      }
+      const isMedia = /^ppt\/media\//i.test(n);
+      out.file(n, e.async("uint8array"), isMedia ? { compression: "STORE" } : {});
+    }
+    return out.generateAsync({ type: "blob", createFolders: false, compression: "DEFLATE", compressionOptions: { level: 6 },
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" },
+      m => onProgress(m.percent / 100));
+  }
+
+  async function offerSave() {
+    const downloads = await Promise.race([downloadsP, new Promise(r => setTimeout(() => r(null), 3000))]).catch(() => null);
+    if (downloads) { $("save").hidden = false; $("save").disabled = false; return; }
+    fallbackUrl = URL.createObjectURL(result.blob);
+    const a = $("fallback"); a.href = fallbackUrl; a.download = result.name; a.hidden = false;
+  }
+
+  async function save() {
+    if (!result) return;
+    const btn = $("save"); btn.disabled = true;
+    try {
+      const downloads = await downloadsP;
+      await downloads.save({ filename: result.name, data: result.blob });
+      message("Đã lưu file. Giờ kéo file vào Google Drive và mở bằng Google Trang trình bày.");
+    } catch (e) {
+      const code = e && e.code;
+      if (code === "declined") message("Bạn đã huỷ lưu file. Bấm lại nút để tải khi cần.");
+      else if (code === "rate_limited") message("Đang có một hộp thoại lưu file mở. Đợi vài giây rồi bấm lại.");
+      else if (code === "too_large" || code === "host_unavailable") message("Ứng dụng này không lưu được file lớn. Mở trang trên trình duyệt máy tính để tải.");
+      else message("Không lưu được file ở đây. Thử mở trang trên trình duyệt máy tính.");
+    } finally { btn.disabled = false; }
+  }
+})();
+</script>
+</body>
+</html>
