@@ -230,6 +230,7 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
     <ol class="steps">
       <li>Bấm vào ô chat, nhấn <b>Ctrl+V</b> (Mac: <b>Cmd+V</b>) để dán ảnh ghép.</li>
       <li>Quay lại đây bấm <b>Copy câu lệnh</b>, rồi dán vào Gemini và gửi.</li>
+      <li>Có ảnh rồi thì bấm copy trên ảnh trong Gemini, quay lại đây nhấn <b>Ctrl+V</b> để đưa vào Ô 4 và xoá logo.</li>
     </ol>
     <div class="actions">
       <button class="primary" id="copyAsk">Copy câu lệnh</button>
@@ -239,11 +240,28 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
     <img id="combo" alt="Ảnh ghép talent và các món đồ gửi sang Gemini">
   </section>
 
+
+  <section class="panel" id="resultPanel">
+    <h2><b class="num">Ô 4</b> Ảnh kết quả từ Gemini</h2>
+    <p class="msg">Trong Gemini, bấm nút <b>copy</b> trên ảnh kết quả rồi quay lại đây nhấn <b>Ctrl+V</b> (Mac: <b>Cmd+V</b>). Hoặc tải ảnh về rồi kéo thả vào ô dưới. Web tự xoá logo Gemini ở góc phải dưới.</p>
+    <div class="fbox" id="boxResult" tabindex="0" role="button" aria-label="Ô 4: chọn ảnh kết quả từ Gemini">
+      <div class="fbody" id="resultView"><div class="fhint">Dán hoặc kéo ảnh kết quả vào đây<br><small>hoặc bấm để chọn file</small></div></div>
+      <input id="resultFile" type="file" accept="image/*" hidden>
+    </div>
+    <p class="msg" id="resultMsg" hidden></p>
+    <div class="actions" id="resultActions" hidden>
+      <a class="btn" id="resultDl" download="fitting.png">Tải ảnh</a>
+      <button id="resultCopy" type="button">Copy ảnh</button>
+      <button id="resultToggle" type="button">Xem ảnh gốc</button>
+    </div>
+  </section>
+
   <details class="notes">
     <summary>Lưu ý</summary>
     <p>Dùng tài khoản Google công ty để mở Gemini. Mỗi tài khoản có giới hạn lượt tạo ảnh mỗi ngày.</p>
     <p>Ảnh chỉ được ghép ngay trên máy bạn. Trang không gửi ảnh đi đâu, bạn tự dán vào Gemini.</p>
     <p>Ảnh tạo ra để xem phom dáng, màu và cách phối. Hoạ tiết nhỏ, logo có thể lệch. Gửi khách thì ghi rõ "ảnh demo AI".</p>
+    <p>Web chỉ xoá logo hiện trên góc ảnh. Google vẫn gắn dấu nhận diện ảnh AI vô hình (SynthID) bên trong ảnh, việc này không thay đổi.</p>
     <p>Chưa ưng thì gõ tiếp trong Gemini, ví dụ: "Giữ nguyên mọi thứ, chỉ sơ vin áo vào quần" hoặc "Gương mặt phải giống hệt ảnh gốc".</p>
   </details>
 </div>
@@ -611,10 +629,91 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
     if ($("tab-fitting").hidden || e.target.closest("textarea")) return;
     const files = [...(e.clipboardData?.files || [])].filter(isImg);
     if (!files.length) return;
+    if (!$("fitNext").hidden || (talent && items.length && document.activeElement === $("boxResult"))) { handleResult(files[0]); $("boxResult").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
     if (!talent) { talent = { file: files.shift(), url: "" }; talent.url = URL.createObjectURL(talent.file); }
     items.push(...files.map(f => ({ file: f, url: URL.createObjectURL(f) })));
     changed();
   });
+
+  // ----- Ô 4: result from Gemini, remove the corner sparkle -----
+  let resultOrig = null, resultClean = null, showingOrig = false, resultUrl = null;
+  wireBox($("boxResult"), $("resultFile"), files => { if (files.length) handleResult(files[0]); });
+
+  function lum(d, i) { return d[i] + d[i + 1] + d[i + 2]; }
+  function findSparkle(cx, W, H) {
+    const m = Math.min(W, H), S = Math.round(m * 0.28);
+    const X0 = W - S, Y0 = H - S;
+    const d = cx.getImageData(X0, Y0, S, S).data;
+    const at = (x, y) => (Math.min(S - 1, Math.max(0, y)) * S + Math.min(S - 1, Math.max(0, x))) * 4;
+    const r = Math.max(6, Math.round(m * 0.014));
+    let minx = 1e9, miny = 1e9, maxx = -1, maxy = -1, cnt = 0;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const v = lum(d, at(x, y));
+      const avg = (lum(d, at(x - r, y)) + lum(d, at(x + r, y)) + lum(d, at(x, y - r)) + lum(d, at(x, y + r))) / 4;
+      if (v - avg > 12) { cnt++; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
+    }
+    if (!cnt) return null;
+    const bw = maxx - minx + 1, bh = maxy - miny + 1;
+    const ok = bw > m * 0.02 && bw < m * 0.13 && bh > m * 0.02 && bh < m * 0.13 && Math.abs(bw - bh) < Math.max(bw, bh) * 0.35;
+    return ok ? { x: X0 + minx, y: Y0 + miny, w: bw, h: bh } : null;
+  }
+  function fillRect(cx, W, H, box) {
+    const pad = Math.round(Math.max(box.w, box.h) * 0.3) + 2;
+    const x0 = Math.max(1, box.x - pad), y0 = Math.max(1, box.y - pad);
+    const x1 = Math.min(W - 2, box.x + box.w + pad), y1 = Math.min(H - 2, box.y + box.h + pad);
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    const big = cx.getImageData(x0 - 1, y0 - 1, w + 2, h + 2), d = big.data, BW = w + 2;
+    const P = (x, y, c) => d[((y + 1) * BW + (x + 1)) * 4 + c];
+    const out = cx.createImageData(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const fx = (x + 1) / (w + 1), fy = (y + 1) / (h + 1);
+      for (let c = 0; c < 3; c++) {
+        const horiz = P(-1, y, c) * (1 - fx) + P(w, y, c) * fx;
+        const vert = P(x, -1, c) * (1 - fy) + P(x, h, c) * fy;
+        out.data[(y * w + x) * 4 + c] = (horiz + vert) / 2;
+      }
+      out.data[(y * w + x) * 4 + 3] = 255;
+    }
+    cx.putImageData(out, x0, y0);
+  }
+  async function handleResult(file) {
+    const m = $("resultMsg"); m.hidden = false; m.textContent = "Đang xử lý ảnh…";
+    try {
+      const bmp = await createImageBitmap(file);
+      const W = bmp.width, H = bmp.height;
+      const c = document.createElement("canvas"); c.width = W; c.height = H;
+      const cx = c.getContext("2d", { willReadFrequently: true });
+      cx.drawImage(bmp, 0, 0); bmp.close();
+      resultOrig = file;
+      const box = findSparkle(cx, W, H);
+      if (box) fillRect(cx, W, H, box);
+      resultClean = await new Promise(r => c.toBlob(r, "image/png"));
+      m.textContent = box ? "Đã xoá logo Gemini ở góc phải dưới. Kiểm tra lại góc ảnh trước khi gửi khách." : "Không thấy logo Gemini trên ảnh (trên nền trắng logo gần như không nhìn thấy). Ảnh được giữ nguyên.";
+      showingOrig = false; showResult();
+    } catch { m.textContent = "Không đọc được ảnh này. Thử tải ảnh từ Gemini về rồi kéo thả vào."; }
+  }
+  function showResult() {
+    const blob = showingOrig ? resultOrig : resultClean;
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    resultUrl = URL.createObjectURL(blob);
+    const v = $("resultView"); v.replaceChildren();
+    const im = document.createElement("img"); im.src = resultUrl; im.alt = showingOrig ? "Ảnh gốc từ Gemini" : "Ảnh đã xoá logo"; v.append(im);
+    $("boxResult").classList.add("has");
+    $("resultActions").hidden = false;
+    const cleanUrl = showingOrig ? URL.createObjectURL(resultClean) : resultUrl;
+    $("resultDl").href = cleanUrl;
+    const t = new Date(), pad = n => String(n).padStart(2, "0");
+    $("resultDl").download = `fitting-${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}.png`;
+    $("resultToggle").textContent = showingOrig ? "Xem ảnh đã xoá logo" : "Xem ảnh gốc";
+  }
+  $("resultToggle").addEventListener("click", () => { showingOrig = !showingOrig; showResult(); });
+  $("resultCopy").addEventListener("click", async () => {
+    const b = $("resultCopy");
+    try { await navigator.clipboard.write([new ClipboardItem({ "image/png": resultClean })]); b.textContent = "Đã copy ảnh"; }
+    catch { b.textContent = "Không copy được, dùng nút Tải ảnh"; }
+    setTimeout(() => { b.textContent = "Copy ảnh"; }, 2000);
+  });
+
   $("resetFit").addEventListener("click", () => {
     if (talent) URL.revokeObjectURL(talent.url); items.forEach(i => URL.revokeObjectURL(i.url));
     talent = null; items = []; comboBlob = null; $("fitNext").hidden = true; fitMsg(""); changed();
