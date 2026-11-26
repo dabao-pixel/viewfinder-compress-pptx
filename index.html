@@ -92,7 +92,7 @@ details summary { cursor: pointer; font-weight: 600; }
   <header>
     <div class="limit">Giới hạn Google Slides: 100 MB</div>
     <h1>Nén PPTX để mở bằng Google Slides</h1>
-    <p class="lede">Chọn file PowerPoint quá nặng. Trang này thu nhỏ ảnh bên trong cho đến khi file còn dưới mức bạn đặt, rồi trả lại file .pptx để tải lên Google Drive. Chữ, bố cục và số slide giữ nguyên.</p>
+    <p class="lede">Chọn file PowerPoint quá nặng. Trang này thu nhỏ ảnh, video và âm thanh bên trong cho đến khi file còn dưới mức bạn đặt (luôn dưới 100 MB), rồi trả lại file .pptx để tải lên Google Drive. Chữ, bố cục và số slide giữ nguyên.</p>
   </header>
 
   <div id="drop" class="drop" tabindex="0" role="button" aria-label="Chọn file PPTX">
@@ -103,8 +103,8 @@ details summary { cursor: pointer; font-weight: 600; }
   </div>
 
   <div class="settings">
-    <label for="target">Nén xuống dưới <input id="target" type="number" min="10" max="500" step="1" value="95"> MB</label>
-    <span>Để 95 MB là an toàn cho Google Slides.</span>
+    <label for="target">Nén xuống dưới <input id="target" type="number" min="10" max="99" step="1" value="95"> MB</label>
+    <span>Tối đa 99 MB. Để 95 MB là an toàn cho Google Slides.</span>
   </div>
 
   <section id="job" class="panel" hidden aria-live="polite">
@@ -137,7 +137,8 @@ details summary { cursor: pointer; font-weight: 600; }
     <summary>Trang này làm gì với file</summary>
     <p>Ảnh trong slide được thu nhỏ dần theo từng mức (cạnh dài 2560 → 1920 → 1600 → 1280 → 1024 → 800 px) cho đến khi file đủ nhẹ. Dừng ở mức nhẹ tay nhất là đủ.</p>
     <p>Ảnh PNG không có nền trong suốt được đổi sang JPEG cho nhẹ. Ảnh PNG có nền trong suốt vẫn giữ PNG.</p>
-    <p>Video, âm thanh và font nhúng không nén được. Nếu file vẫn quá nặng vì video, trang sẽ báo để bạn bỏ bớt video trong PowerPoint.</p>
+    <p>Nếu chỉ nén ảnh chưa đủ, trang nén luôn video và âm thanh trong slide: tính dung lượng còn trống rồi hạ độ phân giải và bitrate video cho vừa. File có video lớn sẽ mất vài phút, và lần đầu cần tải thêm bộ xử lý video khoảng 32 MB.</p>
+    <p>Google Slides thường không giữ video nhúng từ file PowerPoint, nên video bị nén mạnh cũng không ảnh hưởng bản Slides. Bản .pptx nén vẫn phát được video trong PowerPoint.</p>
     <p>Chỉ nhận .pptx. File .ppt đời cũ cần mở bằng PowerPoint và lưu lại dạng .pptx trước.</p>
   </details>
 </div>
@@ -147,16 +148,23 @@ details summary { cursor: pointer; font-weight: 600; }
 (() => {
   const $ = id => document.getElementById(id);
   const MB = 1e6;
+  const MAX_TARGET = 99, MIN_TARGET = 10;
   const TIERS = [
     { max: 2560, q: 0.88 }, { max: 1920, q: 0.82 }, { max: 1600, q: 0.78 },
     { max: 1280, q: 0.72 }, { max: 1024, q: 0.66 }, { max: 800, q: 0.6 }
   ];
-  const MIN_BYTES = 150 * 1024; // skip images already small
+  const MIN_BYTES = 150 * 1024;
+  const VIDEO_RE = /\.(mp4|m4v|mov|avi|wmv|mpg|mpeg)$/i;
+  const AUDIO_RE = /\.(wav|mp3|m4a|aac|wma)$/i;
+  const NEW_TYPES = { jpeg: "image/jpeg", mp4: "video/mp4" };
+  const BASE = new URL(".", location.href).href;
+
   let downloadsP = null;
   try { downloadsP = window.claude && window.claude.use ? window.claude.use("downloads") : Promise.resolve(null); } catch { downloadsP = Promise.resolve(null); }
 
-  let busy = false, result = null, fallbackUrl = null;
+  let busy = false, result = null, fallbackUrl = null, ffmpeg = null;
   const fmt = b => (b / MB).toFixed(1) + " MB";
+  const base = n => n.split("/").pop();
 
   const drop = $("drop"), input = $("file");
   drop.addEventListener("click", () => !busy && input.click());
@@ -167,8 +175,10 @@ details summary { cursor: pointer; font-weight: 600; }
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; if (f && !busy) run(f); });
   $("again").addEventListener("click", () => { $("job").hidden = true; drop.focus(); });
   $("save").addEventListener("click", save);
+  $("target").addEventListener("change", () => { $("target").value = clampTarget($("target").value); });
 
-  function setProgress(frac, text) { $("barFill").style.width = Math.round(frac * 100) + "%"; $("status").textContent = text; }
+  function clampTarget(v) { return Math.min(MAX_TARGET, Math.max(MIN_TARGET, Math.round(Number(v) || 95))); }
+  function setProgress(frac, text) { $("barFill").style.width = Math.round(Math.min(1, frac) * 100) + "%"; $("status").textContent = text; }
   function badge(kind, text) { const b = $("badge"); b.className = "pill " + kind; b.textContent = text; }
   function message(text) { const m = $("msg"); m.textContent = text; m.hidden = !text; }
 
@@ -182,7 +192,8 @@ details summary { cursor: pointer; font-weight: 600; }
     setProgress(0, "Đang đọc file…");
   }
 
-  async function encode(blob, isPng, tier) {
+  // ---------- images ----------
+  async function encodeImage(blob, isPng, tier) {
     const bmp = await createImageBitmap(blob);
     const { width: w, height: h } = bmp;
     const scale = Math.min(1, tier.max / Math.max(w, h));
@@ -200,112 +211,242 @@ details summary { cursor: pointer; font-weight: 600; }
     if (!alpha) { cx.fillStyle = "#fff"; cx.fillRect(0, 0, W, H); }
     cx.imageSmoothingQuality = "high";
     cx.drawImage(bmp, 0, 0, W, H); bmp.close();
-    const type = alpha ? "image/png" : "image/jpeg";
-    const out = await new Promise(r => c.toBlob(r, type, tier.q));
+    const out = await new Promise(r => c.toBlob(r, alpha ? "image/png" : "image/jpeg", tier.q));
     c.width = c.height = 0;
     return { blob: out, jpeg: !alpha };
   }
 
+  async function imageTier(job, t) {
+    if (job.tierCache[t]) return job.tierCache[t];
+    const tier = TIERS[t], repl = {};
+    let saved = 0;
+    for (let i = 0; i < job.cands.length; i++) {
+      const c = job.cands[i];
+      setProgress(job.p0 + (job.p1 - job.p0) * (i / job.cands.length), `Ảnh: mức ${t + 1}/${TIERS.length} (tối đa ${tier.max}px) · ${i + 1}/${job.cands.length}`);
+      const isPng = /\.png$/i.test(c.name);
+      let r;
+      try { r = await encodeImage(job.blobs[c.name], isPng, tier); } catch { continue; }
+      if (!r.blob || r.blob.size >= c.size) continue;
+      let newName = c.name;
+      if (isPng && r.jpeg) newName = uniqueName(job, c.name.replace(/\.png$/i, ""), "jpeg");
+      repl[c.name] = { newName, blob: r.blob };
+      saved += c.size - r.blob.size;
+    }
+    return (job.tierCache[t] = { repl, saved });
+  }
+
+  function uniqueName(job, stem, ext) {
+    let n = `${stem}.${ext}`, k = 1;
+    while (job.existing.has(n.toLowerCase())) n = `${stem}_${k++}.${ext}`;
+    job.existing.add(n.toLowerCase());
+    return n;
+  }
+
+  // ---------- video / audio (ffmpeg.wasm, loaded only when needed) ----------
+  function loadScript(src) {
+    return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error(src)); document.head.appendChild(s); });
+  }
+  async function getFFmpeg() {
+    if (ffmpeg) return ffmpeg;
+    setProgress(0, "Đang tải bộ xử lý video (khoảng 32 MB, chỉ tải lần đầu)…");
+    if (!window.FFmpegWASM) await loadScript(BASE + "vendor/ffmpeg/ffmpeg.js");
+    const ff = new window.FFmpegWASM.FFmpeg();
+    await ff.load({ coreURL: BASE + "vendor/core/ffmpeg-core.js", wasmURL: BASE + "vendor/core/ffmpeg-core.wasm" });
+    ffmpeg = ff;
+    return ff;
+  }
+
+  async function probe(ff, name, data) {
+    const fsName = "probe_" + base(name);
+    await ff.writeFile(fsName, data.slice());
+    let log = "";
+    const onLog = ({ message }) => { log += message + "\n"; };
+    ff.on("log", onLog);
+    try { await ff.exec(["-hide_banner", "-i", fsName]); } catch {}
+    ff.off("log", onLog);
+    try { await ff.deleteFile(fsName); } catch {}
+    const m = log.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+    const dur = m ? (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]) : 0;
+    const hm = log.match(/Video:.*?\s(\d{2,5})x(\d{2,5})/);
+    return { dur, height: hm ? +hm[2] : 0, hasAudio: /Audio:/.test(log) };
+  }
+
+  function pickHeight(vbps, srcH) {
+    const h = vbps >= 1200e3 ? 720 : vbps >= 600e3 ? 540 : vbps >= 300e3 ? 360 : 240;
+    return srcH ? Math.min(h, srcH) : h;
+  }
+
+  async function encodeAV(ff, job, m, opts, label) {
+    const ext = m.name.split(".").pop().toLowerCase();
+    const inName = "in_" + base(m.name);
+    let outExt = ext, args;
+    if (m.kind === "audio") {
+      if (ext === "wav") args = ["-ac", "1", "-ar", String(opts.wavRate), "-c:a", "pcm_s16le"];
+      else if (ext === "mp3") args = ["-c:a", "libmp3lame", "-b:a", "64k"];
+      else if (ext === "wma") args = ["-c:a", "wmav2", "-b:a", "64k"];
+      else args = ["-c:a", "aac", "-b:a", "64k"];
+      args = ["-vn", ...args];
+    } else {
+      if (!/^(mp4|m4v|mov)$/.test(ext)) outExt = "mp4";
+      const h = pickHeight(opts.vbps, m.height);
+      args = ["-vf", `scale=-2:trunc(min(${h}\\,ih)/2)*2`, "-c:v", "libx264", "-preset", "superfast",
+        "-b:v", String(opts.vbps), "-maxrate", String(Math.round(opts.vbps * 1.25)), "-bufsize", String(opts.vbps * 2),
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "64k", "-ac", "2"];
+      if (outExt !== "mov") args.push("-movflags", "+faststart");
+      if (outExt === "mov") args.push("-f", "mov");
+    }
+    const outName = "out_" + base(m.name).replace(/\.[^.]+$/, "") + "." + outExt;
+    const onProg = ({ progress }) => { if (progress >= 0 && progress <= 1) setProgress(label.p, `${label.text} · ${Math.round(progress * 100)}%`); };
+    ff.on("progress", onProg);
+    let blob = null;
+    try {
+      await ff.writeFile(inName, job.avData[m.name].slice());
+      const code = await ff.exec(["-hide_banner", "-y", "-i", inName, ...args, outName]);
+      if (code === 0) blob = new Blob([await ff.readFile(outName)]);
+    } catch {}
+    ff.off("progress", onProg);
+    try { await ff.deleteFile(inName); } catch {}
+    try { await ff.deleteFile(outName); } catch {}
+    if (!blob || blob.size >= m.size) return null;
+    const newName = outExt === ext ? m.name : uniqueName(job, m.name.replace(/\.[^.]+$/, ""), outExt);
+    return { newName, blob };
+  }
+
+  // ---------- main ----------
   async function run(file) {
+    $("target").value = clampTarget($("target").value);
     if (!/\.pptx$/i.test(file.name)) { reset(file); setProgress(0, ""); badge("bad", "Sai định dạng"); message("Trang này chỉ nhận file .pptx. Với file .ppt, mở bằng PowerPoint và lưu lại dạng .pptx trước."); $("again").hidden = false; return; }
     if (typeof JSZip === "undefined") { reset(file); badge("bad", "Lỗi"); message("Không tải được thư viện đọc file. Kiểm tra mạng rồi tải lại trang."); return; }
     busy = true; reset(file);
-    const target = Math.max(10, Number($("target").value) || 95) * MB;
+    const target = clampTarget($("target").value) * MB;
     try {
       const zip = await JSZip.loadAsync(file);
       const names = Object.keys(zip.files).filter(n => !zip.files[n].dir);
+      const sizeOf = n => (zip.files[n]._data && zip.files[n]._data.uncompressedSize) || 0;
       const media = names.filter(n => /^ppt\/media\//i.test(n));
-      const imgs = [], others = [];
-      for (const n of media) {
-        const size = zip.files[n]._data && zip.files[n]._data.uncompressedSize || 0;
-        if (/\.(png|jpe?g)$/i.test(n)) imgs.push({ name: n, size }); else others.push({ name: n, size });
-      }
+      const job = {
+        zip, names, tierCache: [], blobs: {}, avData: {},
+        existing: new Set(names.map(n => n.toLowerCase())),
+        cands: media.filter(n => /\.(png|jpe?g)$/i.test(n) && sizeOf(n) >= MIN_BYTES).map(n => ({ name: n, size: sizeOf(n) })).sort((a, b) => b.size - a.size),
+        avs: media.filter(n => VIDEO_RE.test(n) || AUDIO_RE.test(n)).map(n => ({ name: n, size: sizeOf(n), kind: VIDEO_RE.test(n) ? "video" : "audio" })).filter(m => m.size > 300 * 1024),
+        p0: 0, p1: 1
+      };
       if (file.size <= target) {
-        setProgress(1, "");
-        badge("ok", "Đã đủ nhẹ"); $("sizeOut").textContent = fmt(file.size);
+        setProgress(1, ""); badge("ok", "Đã đủ nhẹ"); $("sizeOut").textContent = fmt(file.size);
         message(`File chỉ ${fmt(file.size)}, đã dưới ${fmt(target)}. Tải thẳng file gốc lên Google Drive là được.`);
-        $("again").hidden = false; busy = false; return;
+        return;
       }
-      const cands = imgs.filter(i => i.size >= MIN_BYTES).sort((a, b) => b.size - a.size);
-      const blobs = {};
-      for (const c of cands) blobs[c.name] = await zip.files[c.name].async("blob");
-      const existing = new Set(names.map(n => n.toLowerCase()));
-      let final = null, lastSize = 0;
+      for (const c of job.cands) job.blobs[c.name] = await zip.files[c.name].async("blob");
+      const avTotal = job.avs.reduce((s, m) => s + m.size, 0);
+      let final = null, lastSize = file.size, usedTier = 0, avNote = "";
 
-      for (let t = 0; t < TIERS.length; t++) {
-        const tier = TIERS[t], repl = {};
-        let saved = 0;
-        for (let i = 0; i < cands.length; i++) {
-          const c = cands[i];
-          setProgress((t + i / cands.length) / TIERS.length, `Mức ${t + 1}/${TIERS.length} · ảnh tối đa ${tier.max}px · đang nén ảnh ${i + 1}/${cands.length}`);
-          const isPng = /\.png$/i.test(c.name);
-          let r;
-          try { r = await encode(blobs[c.name], isPng, tier); } catch { continue; }
-          if (!r.blob || r.blob.size >= c.size) continue;
-          let newName = c.name;
-          if (isPng && r.jpeg) {
-            const base = c.name.replace(/\.png$/i, "");
-            newName = base + ".jpeg";
-            let k = 1; while (existing.has(newName.toLowerCase())) newName = `${base}_${k++}.jpeg`;
-          }
-          repl[c.name] = { newName, blob: r.blob };
-          saved += c.size - r.blob.size;
+      // Phase 1: images only. Skip straight to phase 2 when even fully shrunk images could not fit.
+      const imgTotal = job.cands.reduce((s, c) => s + c.size, 0);
+      const hopeless = file.size - imgTotal * 0.85 > target;
+      if (!hopeless) {
+        for (let t = 0; t < TIERS.length && !final; t++) {
+          job.p0 = t / TIERS.length * 0.9; job.p1 = (t + 1) / TIERS.length * 0.9;
+          const res = await imageTier(job, t);
+          if (file.size - res.saved > target * 1.02 && t < TIERS.length - 1) continue;
+          setProgress(job.p1, `Đang đóng gói file…`);
+          const out = await build(zip, names, res.repl);
+          lastSize = out.size; $("sizeOut").textContent = fmt(out.size);
+          if (out.size <= target) { final = out; usedTier = t; }
         }
-        const estimate = file.size - saved;
-        if (estimate > target * 1.02 && t < TIERS.length - 1) continue;
-        setProgress((t + 1) / TIERS.length, `Mức ${t + 1}: đang đóng gói file…`);
-        const out = await build(zip, names, repl, p => setProgress((t + 0.5 + p / 2) / TIERS.length, `Mức ${t + 1}: đang đóng gói file… ${Math.round(p * 100)}%`));
-        lastSize = out.size;
-        $("sizeOut").textContent = fmt(out.size);
-        if (out.size <= target) { final = { blob: out, tier: t }; break; }
-        if (t === TIERS.length - 1) final = { blob: out, tier: t, over: true };
       }
 
-      result = { blob: final.blob, name: file.name.replace(/\.pptx$/i, "") + " (nén).pptx" };
-      setProgress(1, "");
-      if (final.over) {
-        const bigOthers = others.filter(o => o.size > 2 * MB).sort((a, b) => b.size - a.size).slice(0, 5);
-        const vids = bigOthers.length ? ` Phần nặng còn lại không phải ảnh: ${bigOthers.map(o => o.name.split("/").pop() + " (" + fmt(o.size) + ")").join(", ")}. Hãy xoá hoặc nén các video/âm thanh này trong PowerPoint rồi thử lại.` : "";
-        badge("warn", "Vẫn còn nặng");
-        message(`Đã nén ảnh hết mức nhưng file vẫn ${fmt(lastSize)}, trên ${fmt(target)}.${vids}`);
-      } else {
-        badge("ok", `Giảm ${Math.round((1 - final.blob.size / file.size) * 100)}%`);
-        message(final.tier <= 1 ? "Xong. Ảnh chỉ thu nhỏ nhẹ, trình chiếu gần như không khác bản gốc." : `Xong. Ảnh được thu nhỏ về tối đa ${TIERS[final.tier].max}px. Trình chiếu vẫn ổn, nhưng phóng to sẽ thấy kém nét hơn bản gốc.`);
+      // Phase 2: shrink video and audio to whatever space is left.
+      if (!final && job.avs.length) {
+        const ff = await getFFmpeg();
+        let vDur = 0;
+        for (let i = 0; i < job.avs.length; i++) {
+          const m = job.avs[i];
+          setProgress(0, `Đang đọc video/âm thanh ${i + 1}/${job.avs.length}…`);
+          job.avData[m.name] = await zip.files[m.name].async("uint8array");
+          Object.assign(m, await probe(ff, m.name, job.avData[m.name]));
+          if (m.kind === "video") vDur += m.dur;
+        }
+        const plans = [[2, 1], [2, 0.6], [TIERS.length - 1, 0.6], [TIERS.length - 1, 0.35], [TIERS.length - 1, 0.18]];
+        const encCache = {};
+        for (const [t, factor] of plans) {
+          job.p0 = 0; job.p1 = 0.3;
+          const res = await imageTier(job, t);
+          const fixed = file.size - avTotal - res.saved;
+          const budget = (target * 0.94 - fixed) * factor;
+          if (budget <= 0) continue;
+          const wavRate = factor >= 0.6 ? 22050 : 16000;
+          let audioEst = 0;
+          for (const m of job.avs) if (m.kind === "audio") audioEst += /\.wav$/i.test(m.name) ? m.dur * wavRate * 2 : m.dur * 8000 + 20000;
+          for (const m of job.avs) if (m.kind === "video" && m.hasAudio) audioEst += m.dur * 8000;
+          const vbps = vDur > 0 ? Math.min(3000e3, Math.max(60e3, Math.round(((budget - audioEst) * 8 / vDur) * 0.9 / 1000) * 1000)) : 0;
+          const repl = Object.assign({}, res.repl);
+          for (let i = 0; i < job.avs.length; i++) {
+            const m = job.avs[i];
+            const key = m.name + "|" + (m.kind === "video" ? vbps : wavRate);
+            const label = { p: 0.3 + 0.65 * (i / job.avs.length), text: `${m.kind === "video" ? "Video" : "Âm thanh"} ${i + 1}/${job.avs.length} (${base(m.name)}, ${m.kind === "video" ? Math.round(vbps / 1000) + " kbps" : "giảm chất lượng"})` };
+            setProgress(label.p, label.text);
+            if (!(key in encCache)) encCache[key] = await encodeAV(ff, job, m, { vbps, wavRate }, label);
+            if (encCache[key]) repl[m.name] = encCache[key];
+          }
+          setProgress(0.97, "Đang đóng gói file…");
+          const out = await build(zip, names, repl);
+          lastSize = out.size; $("sizeOut").textContent = fmt(out.size);
+          if (out.size <= target) {
+            final = out; usedTier = t;
+            const h = pickHeight(vbps, 0);
+            avNote = vDur > 0 ? ` Video được nén lại còn khoảng ${Math.round(vbps / 1000)} kbps (tối đa ${h}p) để vừa dung lượng.` : " Âm thanh được giảm chất lượng để vừa dung lượng.";
+            break;
+          }
+        }
       }
+
+      if (!final) {
+        setProgress(1, "");
+        badge("bad", "Chưa xuống được");
+        message(`Đã nén hết mức nhưng file vẫn ${fmt(lastSize)}, trên ${fmt(target)}. Phần không nén được thường là font nhúng hoặc file đính kèm lạ trong slide. Gửi file này cho bộ phận IT/Claude để xử lý riêng.`);
+        return;
+      }
+      result = { blob: final, name: file.name.replace(/\.pptx$/i, "") + " (nén).pptx" };
+      setProgress(1, "");
+      badge("ok", `Giảm ${Math.round((1 - final.size / file.size) * 100)}%`);
+      const imgNote = usedTier <= 1 ? "Ảnh chỉ thu nhỏ nhẹ." : `Ảnh thu nhỏ về tối đa ${TIERS[usedTier].max}px.`;
+      message(`Xong, file còn ${fmt(final.size)}. ${imgNote}${avNote}`);
       await offerSave();
     } catch (e) {
       console.error(e);
-      badge("bad", "Không đọc được file");
-      message("File có thể bị hỏng hoặc không phải PPTX thật. Thử mở bằng PowerPoint, lưu lại, rồi chọn lại file.");
+      badge("bad", "Không xử lý được");
+      message(/memory|Memory|allocation/.test(String(e)) ? "Máy không đủ bộ nhớ để xử lý file này. Đóng bớt tab khác rồi thử lại, hoặc dùng máy tính khác." : "File có thể bị hỏng hoặc không phải PPTX thật. Thử mở bằng PowerPoint, lưu lại, rồi chọn lại file.");
     } finally { busy = false; $("again").hidden = false; }
   }
 
-  async function build(zip, names, repl, onProgress) {
+  async function build(zip, names, repl) {
     const out = new JSZip();
     const renames = Object.entries(repl).filter(([o, r]) => r.newName !== o);
+    const newExts = new Set(renames.map(([, r]) => r.newName.split(".").pop().toLowerCase()));
     for (const n of names) {
       const e = zip.files[n];
       if (repl[n]) { out.file(repl[n].newName, repl[n].blob, { compression: "STORE" }); continue; }
       if (renames.length && /\.rels$/i.test(n)) {
         let txt = await e.async("string"), changed = false;
         for (const [o, r] of renames) {
-          const from = "/" + o.split("/").pop() + '"', to = "/" + r.newName.split("/").pop() + '"';
-          if (txt.includes("media" + from)) { txt = txt.split("media" + from).join("media" + to); changed = true; }
+          const from = "media/" + base(o) + '"', to = "media/" + base(r.newName) + '"';
+          if (txt.includes(from)) { txt = txt.split(from).join(to); changed = true; }
         }
         out.file(n, changed ? txt : e.async("uint8array"));
         continue;
       }
       if (renames.length && n === "[Content_Types].xml") {
         let txt = await e.async("string");
-        if (!/Extension="jpeg"/i.test(txt)) txt = txt.replace(/(<Types[^>]*>)/, '$1<Default Extension="jpeg" ContentType="image/jpeg"/>');
+        for (const ext of newExts) {
+          if (!NEW_TYPES[ext] || new RegExp(`Extension="${ext}"`, "i").test(txt)) continue;
+          txt = txt.replace(/(<Types[^>]*>)/, `$1<Default Extension="${ext}" ContentType="${NEW_TYPES[ext]}"/>`);
+        }
         out.file(n, txt); continue;
       }
-      const isMedia = /^ppt\/media\//i.test(n);
-      out.file(n, e.async("uint8array"), isMedia ? { compression: "STORE" } : {});
+      out.file(n, e.async("uint8array"), /^ppt\/media\//i.test(n) ? { compression: "STORE" } : {});
     }
     return out.generateAsync({ type: "blob", createFolders: false, compression: "DEFLATE", compressionOptions: { level: 6 },
-      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" },
-      m => onProgress(m.percent / 100));
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
   }
 
   async function offerSave() {
@@ -325,8 +466,6 @@ details summary { cursor: pointer; font-weight: 600; }
     } catch (e) {
       const code = e && e.code;
       if (code === "declined") message("Bạn đã huỷ lưu file. Bấm lại nút để tải khi cần.");
-      else if (code === "rate_limited") message("Đang có một hộp thoại lưu file mở. Đợi vài giây rồi bấm lại.");
-      else if (code === "too_large" || code === "host_unavailable") message("Ứng dụng này không lưu được file lớn. Mở trang trên trình duyệt máy tính để tải.");
       else message("Không lưu được file ở đây. Thử mở trang trên trình duyệt máy tính.");
     } finally { btn.disabled = false; }
   }
