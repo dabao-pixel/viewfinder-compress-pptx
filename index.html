@@ -4,31 +4,42 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Nén PPTX cho Google Slides</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: one centered working column — drop zone, settings, live progress, result. */
+/* Layout: white brand band with the Viewfinder logo, then one centered working column. Colors from the logo: charcoal type, lens blue. */
 :root {
-  --bg: #f3f5f4; --surface: #ffffff; --fg: #18201d; --muted: #5c6863;
-  --line: #d7ddda; --accent: #0f6b55; --accent-fg: #ffffff; --accent-soft: #e1efea;
+  --bg: #f2f3f4; --surface: #ffffff; --fg: #1f1f1f; --muted: #5d6266;
+  --line: #d9dcdf; --accent: #0b6f96; --accent-fg: #ffffff; --accent-soft: #e1eff5;
   --warn: #9a5b00; --warn-soft: #fbf0dc; --bad: #a3271f; --bad-soft: #f8e3e1;
+  --band: #ffffff; --band-line: #1f1f1f;
   --font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: "Barlow", "Be Vietnam Pro", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #121715; --surface: #1a211e; --fg: #e6ece9; --muted: #98a59f;
-  --line: #2c3632; --accent: #4cc2a0; --accent-fg: #0b1512; --accent-soft: #1d3630;
-  --warn: #e7b25c; --warn-soft: #3a2e1a; --bad: #f08a80; --bad-soft: #3d2120; color-scheme: dark; } }
+  --bg: #161718; --surface: #1f2123; --fg: #ececec; --muted: #9ca2a7;
+  --line: #303336; --accent: #45b3dc; --accent-fg: #0b1418; --accent-soft: #19303a;
+  --warn: #e7b25c; --warn-soft: #3a2e1a; --bad: #f08a80; --bad-soft: #3d2120;
+  --band: #ffffff; --band-line: #45b3dc; color-scheme: dark; } }
 :root[data-theme="dark"] {
-  --bg: #121715; --surface: #1a211e; --fg: #e6ece9; --muted: #98a59f;
-  --line: #2c3632; --accent: #4cc2a0; --accent-fg: #0b1512; --accent-soft: #1d3630;
-  --warn: #e7b25c; --warn-soft: #3a2e1a; --bad: #f08a80; --bad-soft: #3d2120; color-scheme: dark; }
+  --bg: #161718; --surface: #1f2123; --fg: #ececec; --muted: #9ca2a7;
+  --line: #303336; --accent: #45b3dc; --accent-fg: #0b1418; --accent-soft: #19303a;
+  --warn: #e7b25c; --warn-soft: #3a2e1a; --bad: #f08a80; --bad-soft: #3d2120;
+  --band: #ffffff; --band-line: #45b3dc; color-scheme: dark; }
+.brand { background: var(--band); border-bottom: 3px solid var(--band-line); }
+.brand-in { max-width: 720px; margin: 0 auto; padding-block: 18px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand img { height: 52px; width: auto; display: block; }
+.brand .tag { font-family: var(--display); font-weight: 600; font-size: .85rem; letter-spacing: .12em; text-transform: uppercase; color: #5d6266; }
 
 body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.55; }
-.wrap { max-width: 720px; margin: 0 auto; padding-block: 40px 56px;
+.wrap { max-width: 720px; margin: 0 auto; padding-block: 32px 56px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   display: flex; flex-direction: column; gap: 24px; }
-h1 { font-size: 1.9rem; line-height: 1.2; margin: 0; font-weight: 700; text-wrap: balance; letter-spacing: -0.01em; }
-h2 { font-size: 1rem; margin: 0; font-weight: 600; }
+h1 { font-family: var(--display); font-size: 2.3rem; line-height: 1.1; margin: 0; font-weight: 700; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-size: 1.15rem; margin: 0; font-weight: 600; }
 .lede { margin: 8px 0 0; color: var(--muted); max-width: 60ch; }
 .limit { font-family: var(--mono); font-size: .8rem; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
 
@@ -74,6 +85,8 @@ details summary { cursor: pointer; font-weight: 600; }
 </style>
 </head>
 <body>
+
+<div class="brand"><div class="brand-in"><img src="logo.png" alt="Viewfinder — An Eye For Inspiration" width="863" height="230"><span class="tag">Công cụ nội bộ</span></div></div>
 
 <div class="wrap">
   <header>
