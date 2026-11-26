@@ -81,6 +81,34 @@ body { margin: 0; }
 .notes p { margin: 0; }
 details summary { cursor: pointer; font-weight: 600; }
 .mono { font-family: var(--mono); }
+
+.tabs { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+.tabs-in { max-width: 720px; margin: 0 auto; display: flex; gap: 4px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.tab { font-family: var(--display); font-weight: 700; font-size: 1rem; letter-spacing: .02em; text-decoration: none; color: var(--muted);
+  padding: 14px 14px 12px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--fg); }
+.tab[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); }
+.tab:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.field > span { font-weight: 600; font-size: .9rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.chip span { display: inline-block; padding: 7px 12px; border: 1px solid var(--line); border-radius: 99px; font-size: .9rem; background: var(--surface); user-select: none; }
+.chip input:checked + span { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.chip input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+select, textarea { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg); width: 100%; box-sizing: border-box; }
+textarea { resize: vertical; }
+.order { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--fg); font-size: .9rem; }
+.prompt { font-family: var(--font); min-height: 150px; line-height: 1.5; }
+.quick { display: flex; flex-direction: column; gap: 10px; }
+.qrow { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 10px; }
+.qrow p { margin: 0; min-width: 0; font-size: .92rem; }
+.qrow button { padding: 6px 12px; font-size: .85rem; flex: none; }
+a.btn { display: inline-block; text-decoration: none; font-weight: 600; border-radius: 10px; padding: 10px 18px; background: var(--accent); color: var(--accent-fg); }
+.toast { font-size: .85rem; color: var(--accent); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -88,7 +116,12 @@ details summary { cursor: pointer; font-weight: 600; }
 
 <div class="brand"><div class="brand-in"><img src="logo.png" alt="Viewfinder — An Eye For Inspiration" width="863" height="230"><span class="tag">Công cụ nội bộ</span></div></div>
 
-<div class="wrap">
+<nav class="tabs" aria-label="Công cụ"><div class="tabs-in">
+  <a class="tab" href="#nen" data-tab="nen">Nén PPTX</a>
+  <a class="tab" href="#fitting" data-tab="fitting">Fitting demo</a>
+</div></nav>
+
+<div class="wrap" id="tab-nen">
   <header>
     <div class="limit">Giới hạn Google Slides: 100 MB</div>
     <h1>Nén PPTX để mở bằng Google Slides</h1>
@@ -140,6 +173,71 @@ details summary { cursor: pointer; font-weight: 600; }
     <p>Nếu chỉ nén ảnh chưa đủ, trang nén luôn video và âm thanh trong slide: tính dung lượng còn trống rồi hạ độ phân giải và bitrate video cho vừa. File có video lớn sẽ mất vài phút, và lần đầu cần tải thêm bộ xử lý video khoảng 32 MB.</p>
     <p>Google Slides thường không giữ video nhúng từ file PowerPoint, nên video bị nén mạnh cũng không ảnh hưởng bản Slides. Bản .pptx nén vẫn phát được video trong PowerPoint.</p>
     <p>Chỉ nhận .pptx. File .ppt đời cũ cần mở bằng PowerPoint và lưu lại dạng .pptx trước.</p>
+  </details>
+</div>
+
+<div class="wrap" id="tab-fitting" hidden>
+  <header>
+    <div class="limit">Miễn phí với tài khoản Google</div>
+    <h1>Tạo ảnh fitting demo bằng Gemini</h1>
+    <p class="lede">Chọn món đồ và kiểu ảnh bên dưới để có câu lệnh sẵn. Mở Gemini, tải ảnh talent trước rồi đến ảnh từng món đồ theo đúng thứ tự, dán câu lệnh và gửi.</p>
+  </header>
+
+  <section class="panel">
+    <h2>Các bước</h2>
+    <ol class="steps">
+      <li>Mở Gemini bằng <b>tài khoản Google công ty</b>.</li>
+      <li>Bấm dấu <b>+</b>, tải lên <b>ảnh talent trước</b>, sau đó ảnh từng món đồ theo thứ tự ở mục "Thứ tự tải ảnh".</li>
+      <li>Dán câu lệnh, gửi. Chưa ưng thì sửa tiếp trong cùng cuộc trò chuyện bằng các câu sửa nhanh bên dưới.</li>
+      <li>Mỗi look mới, mở một cuộc trò chuyện mới để kết quả không bị lẫn.</li>
+    </ol>
+    <div class="actions"><a class="btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Mở Gemini</a></div>
+  </section>
+
+  <section class="panel">
+    <h2>Soạn câu lệnh</h2>
+    <div class="field">
+      <span>Món đồ (bấm theo thứ tự bạn sẽ tải ảnh lên)</span>
+      <div class="chips" id="items"></div>
+    </div>
+    <p class="order" id="order"></p>
+    <div class="grid2">
+      <label class="field" for="frame"><span>Khung hình</span>
+        <select id="frame"><option value="full">Toàn thân</option><option value="half">Nửa người (từ hông trở lên)</option></select></label>
+      <label class="field" for="pose"><span>Tư thế</span>
+        <select id="pose"><option value="keep">Giữ nguyên như ảnh talent</option><option value="34">Đứng nghiêng 3/4</option><option value="walk">Đang bước đi tự nhiên</option></select></label>
+      <label class="field" for="bg"><span>Nền</span>
+        <select id="bg"><option value="keep">Giữ nền ảnh talent</option><option value="white">Studio trắng trơn</option><option value="grey">Studio xám trơn</option><option value="outdoor">Ngoài trời, ánh sáng tự nhiên</option></select></label>
+      <label class="field" for="lang"><span>Ngôn ngữ câu lệnh</span>
+        <select id="lang"><option value="vi">Tiếng Việt</option><option value="en">English (thường ổn định hơn)</option></select></label>
+    </div>
+    <label class="field" for="note"><span>Yêu cầu thêm (không bắt buộc)</span>
+      <textarea id="note" rows="2" placeholder="Ví dụ: sơ vin áo vào quần, xắn tay áo đến khuỷu"></textarea></label>
+    <label class="field" for="prompt"><span>Câu lệnh</span>
+      <textarea id="prompt" class="prompt" readonly></textarea></label>
+    <div class="actions"><button class="primary" id="copyPrompt">Copy câu lệnh</button><span class="toast" id="copied" hidden>Đã copy</span></div>
+  </section>
+
+  <section class="panel">
+    <h2>Câu sửa nhanh</h2>
+    <div class="quick" id="quick"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Để ảnh ra đẹp</h2>
+    <ol class="steps">
+      <li><b>Ảnh talent:</b> toàn thân, đứng thẳng, nhìn thẳng, nền đơn giản, tay không che người, mặc đồ ôm gọn.</li>
+      <li><b>Ảnh đồ:</b> mỗi ảnh một món, thấy trọn món đồ (trải phẳng, treo móc hoặc trên manocanh), không bị che hay cắt.</li>
+      <li>Gương mặt lệch hoặc màu đồ sai thì dùng câu sửa nhanh, đừng tạo lại từ đầu.</li>
+    </ol>
+  </section>
+
+  <details class="notes">
+    <summary>Lưu ý về giới hạn và bảo mật</summary>
+    <p>Mỗi tài khoản Google có giới hạn lượt tạo ảnh mỗi ngày. Hết lượt thì chờ hôm sau.</p>
+    <p>Dùng tài khoản Google công ty để ảnh talent không bị dùng huấn luyện AI. Nếu dùng tài khoản cá nhân, tắt "Hoạt động trên các ứng dụng Gemini" trong cài đặt.</p>
+    <p>Ảnh tạo ra đủ để xem phom dáng, màu và cách phối. Hoạ tiết nhỏ, logo, chữ trên áo có thể bị lệch. Khi gửi khách, ghi rõ "ảnh demo AI".</p>
+    <p>Trang này chỉ soạn câu lệnh, không gửi ảnh hay thông tin gì đi đâu.</p>
   </details>
 </div>
 
@@ -468,6 +566,106 @@ details summary { cursor: pointer; font-weight: 600; }
       if (code === "declined") message("Bạn đã huỷ lưu file. Bấm lại nút để tải khi cần.");
       else message("Không lưu được file ở đây. Thử mở trang trên trình duyệt máy tính.");
     } finally { btn.disabled = false; }
+  }
+})();
+</script>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  // ----- tabs -----
+  const tabs = ["nen", "fitting"];
+  function showTab() {
+    const cur = tabs.includes(location.hash.slice(1)) ? location.hash.slice(1) : "nen";
+    for (const t of tabs) $("tab-" + t).hidden = t !== cur;
+    document.querySelectorAll(".tab").forEach(a => a.toggleAttribute("aria-current", false) || (a.dataset.tab === cur && a.setAttribute("aria-current", "page")));
+    document.title = cur === "fitting" ? "Fitting demo · Viewfinder" : "Nén PPTX cho Google Slides";
+  }
+  window.addEventListener("hashchange", showTab); showTab();
+
+  // ----- fitting prompt builder -----
+  const ITEMS = [
+    { id: "top", vi: "áo", en: "the top" }, { id: "bottom", vi: "quần/váy", en: "the bottoms" },
+    { id: "dress", vi: "đầm/set đồ", en: "the dress/set" }, { id: "outer", vi: "áo khoác", en: "the jacket" },
+    { id: "shoes", vi: "giày", en: "the shoes" }, { id: "bag", vi: "túi", en: "the bag" },
+    { id: "acc", vi: "phụ kiện", en: "the accessory" }
+  ];
+  const LABEL = { top: "Áo", bottom: "Quần / váy", dress: "Đầm / set", outer: "Áo khoác", shoes: "Giày", bag: "Túi", acc: "Phụ kiện" };
+  let picked = ["top", "bottom"];
+  const box = $("items");
+  for (const it of ITEMS) {
+    const l = document.createElement("label"); l.className = "chip";
+    const i = document.createElement("input"); i.type = "checkbox"; i.id = "it-" + it.id; i.checked = picked.includes(it.id);
+    const sp = document.createElement("span"); sp.textContent = LABEL[it.id];
+    i.addEventListener("change", () => { picked = i.checked ? [...picked, it.id] : picked.filter(x => x !== it.id); render(); });
+    l.append(i, sp); box.append(l);
+  }
+  ["frame", "pose", "bg", "lang", "note"].forEach(id => $(id).addEventListener("input", render));
+
+  function build() {
+    const lang = $("lang").value, items = picked.map(id => ITEMS.find(x => x.id === id));
+    if (!items.length) return "";
+    const note = $("note").value.trim(), frame = $("frame").value, pose = $("pose").value, bg = $("bg").value;
+    if (lang === "en") {
+      const list = items.map((it, i) => `image ${i + 2} is ${it.en}`).join(", ");
+      const L = [`Image 1 is the talent; ${list}.`,
+        `Create a realistic ${frame === "full" ? "full-body" : "waist-up"} fitting photo of the person in image 1 wearing ${items.length > 1 ? "all of these items styled together" : "this item"}.`,
+        `Keep the face, hairstyle and body shape exactly the same as image 1${pose === "keep" ? ", and keep the same pose" : ""}. The face must be identical, do not change any features.`,
+        `Keep each item's exact colour, pattern, fabric and construction details.`];
+      if (pose === "34") L.push("Pose: standing at a natural three-quarter angle.");
+      if (pose === "walk") L.push("Pose: walking naturally, like a street-style photo.");
+      L.push({ keep: "Keep the background and lighting from image 1.", white: "Plain white studio background, soft even lighting.", grey: "Plain grey studio background, soft even lighting.", outdoor: "Outdoor daytime setting with natural light." }[bg]);
+      if (note) L.push("Also: " + note);
+      L.push("Photorealistic, like a real photo shoot.");
+      return L.join("\n");
+    }
+    const list = items.map((it, i) => `ảnh ${i + 2} là ${it.vi}`).join(", ");
+    const L = [`Ảnh 1 là talent, ${list}.`,
+      `Tạo ảnh fitting ${frame === "full" ? "toàn thân" : "nửa người (từ hông trở lên)"}: người trong ảnh 1 mặc ${items.length > 1 ? "phối đủ các món trên" : "đúng món đồ trên"}.`,
+      `Giữ nguyên 100% gương mặt, kiểu tóc, vóc dáng${pose === "keep" ? ", tư thế" : ""} của ảnh 1. Gương mặt phải giống hệt, không thay đổi đường nét.`,
+      `Giữ đúng màu sắc, hoạ tiết, chất liệu và chi tiết may của từng món.`];
+    if (pose === "34") L.push("Tư thế đứng nghiêng 3/4, tự nhiên.");
+    if (pose === "walk") L.push("Tư thế đang bước đi tự nhiên như ảnh street style.");
+    L.push({ keep: "Giữ nguyên nền và ánh sáng của ảnh 1.", white: "Nền studio trắng trơn, ánh sáng mềm.", grey: "Nền studio xám trơn, ánh sáng mềm.", outdoor: "Bối cảnh ngoài trời ban ngày, ánh sáng tự nhiên." }[bg]);
+    if (note) L.push("Yêu cầu thêm: " + note);
+    L.push("Ảnh chân thực như ảnh chụp thật.");
+    return L.join("\n");
+  }
+  function render() {
+    const order = ["Ảnh 1: talent", ...picked.map((id, i) => `Ảnh ${i + 2}: ${LABEL[id].toLowerCase()}`)];
+    $("order").textContent = picked.length ? "Thứ tự tải ảnh: " + order.join(" → ") : "Chọn ít nhất một món đồ.";
+    $("prompt").value = build();
+    $("copyPrompt").disabled = !picked.length;
+  }
+  render();
+
+  async function copy(text, el) {
+    try { await navigator.clipboard.writeText(text); }
+    catch { const t = $("prompt"); if (el === "main") { t.focus(); t.select(); } }
+  }
+  $("copyPrompt").addEventListener("click", async () => {
+    await copy($("prompt").value, "main");
+    $("copied").hidden = false; setTimeout(() => { $("copied").hidden = true; }, 1800);
+  });
+
+  const QUICK = [
+    "Gương mặt chưa giống ảnh 1. Làm lại, gương mặt phải giống hệt người trong ảnh 1, không thay đổi đường nét.",
+    "Màu và hoạ tiết của trang phục chưa đúng. Giữ nguyên mọi thứ, chỉ sửa trang phục cho đúng màu và hoạ tiết như ảnh gốc của món đồ.",
+    "Giữ nguyên mọi thứ, chỉ sơ vin áo vào quần.",
+    "Giữ nguyên mọi thứ, chỉ đổi sang tư thế đứng nghiêng 3/4.",
+    "Giữ nguyên mọi thứ, chỉ đổi nền thành studio trắng trơn.",
+    "Giữ nguyên talent và trang phục, tạo thêm một ảnh chụp từ phía sau."
+  ];
+  for (const q of QUICK) {
+    const row = document.createElement("div"); row.className = "qrow";
+    const p = document.createElement("p"); p.textContent = q;
+    const b = document.createElement("button"); b.type = "button"; b.textContent = "Copy";
+    b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(q); b.textContent = "Đã copy"; }
+      catch { const r = document.createRange(); r.selectNodeContents(p); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); b.textContent = "Đã chọn chữ"; }
+      setTimeout(() => { b.textContent = "Copy"; }, 1600);
+    });
+    row.append(p, b); $("quick").append(row);
   }
 })();
 </script>
