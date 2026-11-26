@@ -77,6 +77,8 @@ a.dl { display: inline-block; text-decoration: none; font-weight: 600; border-ra
 body { margin: 0; }
 
 .steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+.ext { border-color: var(--accent); background: var(--accent-soft); }
+.ext a { color: var(--accent); font-weight: 600; }
 .notes { color: var(--muted); font-size: .88rem; display: flex; flex-direction: column; gap: 6px; }
 .notes p { margin: 0; }
 details summary { cursor: pointer; font-weight: 600; }
@@ -200,7 +202,7 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
   <header>
     <div class="limit">Miễn phí với tài khoản Google</div>
     <h1>Fitting demo bằng Gemini</h1>
-    <p class="lede">Thả ảnh talent, thả các món đồ, gõ yêu cầu. Bấm "Gửi sang Gemini" rồi dán vào Gemini là xong.</p>
+    <p class="lede">Thả ảnh talent, thả các món đồ, gõ yêu cầu rồi bấm nút. Có cài tiện ích Viewfinder cho Chrome thì ảnh tự về Ô 4, không phải dán gì.</p>
   </header>
 
   <div class="fit3">
@@ -224,6 +226,19 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
     <button id="resetFit" type="button">Làm lại</button>
   </div>
   <p class="msg" id="fitMsg" hidden></p>
+
+  <section class="panel ext" id="extPanel" hidden>
+    <h2>Bấm 1 lần ra ảnh: cài tiện ích cho Chrome</h2>
+    <p class="msg">Cài 1 lần, khoảng 1 phút. Sau đó bấm nút là tiện ích tự mở Gemini bằng tài khoản Google của bạn, tự dán ảnh và câu lệnh, chờ ảnh xong rồi đưa về Ô 4. Chỉ dùng trên Chrome máy tính.</p>
+    <ol class="steps">
+      <li><a href="viewfinder-fitting-extension.zip" download>Tải tiện ích (.zip)</a> rồi nhấp đúp để giải nén. Để thư mục giải nén ở chỗ cố định, đừng xoá.</li>
+      <li>Mở tab mới, gõ <b>chrome://extensions</b> vào thanh địa chỉ rồi Enter.</li>
+      <li>Bật <b>Chế độ dành cho nhà phát triển</b> (Developer mode) ở góc phải trên.</li>
+      <li>Bấm <b>Tải tiện ích đã giải nén</b> (Load unpacked), chọn thư mục <b>extension</b> vừa giải nén.</li>
+      <li>Quay lại trang này, nhấn F5. Nút sẽ đổi thành <b>Tạo ảnh fitting</b>.</li>
+    </ol>
+    <p class="msg">Chrome phải đang đăng nhập tài khoản Google. Khi chạy, đừng gõ gì vào tab Gemini cho đến khi ảnh về.</p>
+  </section>
 
   <section class="panel" id="fitNext" hidden aria-live="polite">
     <h2>Trong tab Gemini vừa mở</h2>
@@ -259,7 +274,7 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
   <details class="notes">
     <summary>Lưu ý</summary>
     <p>Dùng tài khoản Google công ty để mở Gemini. Mỗi tài khoản có giới hạn lượt tạo ảnh mỗi ngày.</p>
-    <p>Ảnh chỉ được ghép ngay trên máy bạn. Trang không gửi ảnh đi đâu, bạn tự dán vào Gemini.</p>
+    <p>Ảnh chỉ được ghép ngay trên máy bạn và chỉ gửi sang Gemini bằng tài khoản Google của bạn (tự dán, hoặc qua tiện ích). Không đi qua máy chủ nào khác.</p>
     <p>Ảnh tạo ra để xem phom dáng, màu và cách phối. Hoạ tiết nhỏ, logo có thể lệch. Gửi khách thì ghi rõ "ảnh demo AI".</p>
     <p>Web chỉ xoá logo hiện trên góc ảnh. Google vẫn gắn dấu nhận diện ảnh AI vô hình (SynthID) bên trong ảnh, việc này không thay đổi.</p>
     <p>Chưa ưng thì gõ tiếp trong Gemini, ví dụ: "Giữ nguyên mọi thứ, chỉ sơ vin áo vào quần" hoặc "Gương mặt phải giống hệt ảnh gốc".</p>
@@ -835,7 +850,43 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
     await navigator.clipboard.write([new ClipboardItem({ "image/png": comboBlob })]);
   }
 
+
+  // ----- one-click mode through the Viewfinder Chrome extension -----
+  const hasExt = () => !!document.documentElement.dataset.vfFitExt;
+  let runId = null, watchdog = null;
+  function setMode() {
+    $("sendGemini").textContent = hasExt() ? "Tạo ảnh fitting" : "Gửi sang Gemini";
+    $("extPanel").hidden = hasExt() || !/Chrome\//.test(navigator.userAgent) || /Mobile|Android/.test(navigator.userAgent);
+  }
+  setMode(); setTimeout(setMode, 500); setTimeout(setMode, 1500);
+  function poke() { clearTimeout(watchdog); watchdog = setTimeout(() => { if (runId) { fitMsg("Chưa thấy Gemini phản hồi. Mở tab Gemini xem có cần đăng nhập không, rồi bấm lại."); endRun(); } }, 60000); }
+  function endRun() { runId = null; clearTimeout(watchdog); $("sendGemini").disabled = !(talent && items.length); }
+  async function runExt() {
+    const btn = $("sendGemini"); btn.disabled = true; fitMsg("Đang ghép ảnh…");
+    try {
+      if (!comboBlob) comboBlob = await makeCombo();
+      $("combo").src = URL.createObjectURL(comboBlob);
+      const image = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(comboBlob); });
+      runId = String(Date.now());
+      window.postMessage({ vf: "run", id: runId, image, prompt: fullPrompt().replace(/\n/g, " ") }, location.origin);
+      fitMsg("Đang mở Gemini… đừng gõ gì vào tab Gemini cho đến khi ảnh về."); poke();
+    } catch (e) { fitMsg("Không ghép được ảnh. Thử lại."); endRun(); }
+  }
+  window.addEventListener("message", async e => {
+    if (e.source !== window || !e.data || e.data.vf !== "ext" || e.data.id !== runId) return;
+    const m = e.data;
+    if (m.t === "progress") { fitMsg(m.text); poke(); }
+    else if (m.t === "error") { fitMsg(m.text); endRun(); }
+    else if (m.t === "done") {
+      endRun(); fitMsg("Xong. Ảnh đã về Ô 4.");
+      const blob = await (await fetch(m.image)).blob();
+      await handleResult(blob);
+      $("resultPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+
   $("sendGemini").addEventListener("click", async () => {
+    if (hasExt()) return runExt();
     const btn = $("sendGemini"); btn.disabled = true; fitMsg("Đang ghép ảnh…");
     let copied = false;
     try {
