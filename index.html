@@ -243,7 +243,7 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
 
   <section class="panel" id="resultPanel">
     <h2><b class="num">Ô 4</b> Ảnh kết quả từ Gemini</h2>
-    <p class="msg">Trong Gemini, bấm nút <b>copy</b> trên ảnh kết quả rồi quay lại đây nhấn <b>Ctrl+V</b> (Mac: <b>Cmd+V</b>). Hoặc tải ảnh về rồi kéo thả vào ô dưới. Web tự xoá logo Gemini ở góc phải dưới.</p>
+    <p class="msg">Trong Gemini, bấm nút <b>copy</b> trên ảnh kết quả rồi quay lại đây, rê chuột vào ô dưới và nhấn <b>Ctrl+V</b> (Mac: <b>Cmd+V</b>). Hoặc tải ảnh về rồi kéo thả vào ô dưới. Web tự xoá logo Gemini ở góc phải dưới.</p>
     <div class="fbox" id="boxResult" tabindex="0" role="button" aria-label="Ô 4: chọn ảnh kết quả từ Gemini">
       <div class="fbody" id="resultView"><div class="fhint">Dán hoặc kéo ảnh kết quả vào đây<br><small>hoặc bấm để chọn file</small></div></div>
       <input id="resultFile" type="file" accept="image/*" hidden>
@@ -614,6 +614,8 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
   let comboBlob = null;
 
   const isImg = f => f && /^image\//.test(f.type);
+  let hoverBox = null; // paste goes to the box under the mouse
+  ["boxTalent", "boxItems", "boxResult"].forEach(id => { const el = document.getElementById(id); el.addEventListener("mouseenter", () => { hoverBox = id; }); el.addEventListener("mouseleave", () => { if (hoverBox === id) hoverBox = null; }); });
   function wireBox(box, input, onFiles) {
     box.addEventListener("click", e => { if (!e.target.closest("button")) input.click(); });
     box.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
@@ -629,7 +631,9 @@ a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid va
     if ($("tab-fitting").hidden || e.target.closest("textarea")) return;
     const files = [...(e.clipboardData?.files || [])].filter(isImg);
     if (!files.length) return;
-    if (!$("fitNext").hidden || (talent && items.length && document.activeElement === $("boxResult"))) { handleResult(files[0]); $("boxResult").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+    if (hoverBox === "boxResult" || (!hoverBox && !$("fitNext").hidden)) { handleResult(files[0]); $("boxResult").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+    if (hoverBox === "boxItems") { items.push(...files.map(f => ({ file: f, url: URL.createObjectURL(f) }))); changed(); return; }
+    if (hoverBox === "boxTalent") { if (talent) URL.revokeObjectURL(talent.url); talent = { file: files[0], url: URL.createObjectURL(files[0]) }; changed(); return; }
     if (!talent) { talent = { file: files.shift(), url: "" }; talent.url = URL.createObjectURL(talent.file); }
     items.push(...files.map(f => ({ file: f, url: URL.createObjectURL(f) })));
     changed();
