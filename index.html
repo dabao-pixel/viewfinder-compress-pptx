@@ -109,6 +109,26 @@ textarea { resize: vertical; }
 .qrow button { padding: 6px 12px; font-size: .85rem; flex: none; }
 a.btn { display: inline-block; text-decoration: none; font-weight: 600; border-radius: 10px; padding: 10px 18px; background: var(--accent); color: var(--accent-fg); }
 .toast { font-size: .85rem; color: var(--accent); font-weight: 600; }
+
+.fit3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.fbox { border: 2px dashed var(--line); border-radius: 14px; background: var(--surface); display: flex; flex-direction: column; min-width: 0; cursor: pointer; transition: border-color .15s, background .15s; }
+.fbox:hover, .fbox.over { border-color: var(--accent); background: var(--accent-soft); }
+.fbox:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.fbox.has { border-style: solid; }
+.fhead { padding: 12px 14px; font-weight: 600; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: baseline; }
+.fhead b, .num { font-family: var(--display); color: var(--accent); }
+.fbody { flex: 1; min-height: 240px; padding: 12px; display: flex; align-items: center; justify-content: center; }
+.fhint { text-align: center; color: var(--muted); }
+.fhint small { font-size: .85rem; }
+.fbody > img { max-height: 320px; max-width: 100%; border-radius: 8px; object-fit: contain; }
+.thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; width: 100%; align-self: flex-start; }
+.thumb { position: relative; aspect-ratio: 1; border-radius: 8px; background: var(--bg); overflow: hidden; }
+.thumb img { width: 100%; height: 100%; object-fit: contain; }
+.thumb button { position: absolute; top: 4px; right: 4px; padding: 0; width: 24px; height: 24px; border-radius: 99px; font-size: 14px; line-height: 1; }
+.thumb.add { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.6rem; border: 1px dashed var(--line); }
+button.big { font-size: 1.05rem; padding: 12px 24px; }
+a.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid var(--line); }
+#combo { width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -179,65 +199,52 @@ a.btn { display: inline-block; text-decoration: none; font-weight: 600; border-r
 <div class="wrap" id="tab-fitting" hidden>
   <header>
     <div class="limit">Miễn phí với tài khoản Google</div>
-    <h1>Tạo ảnh fitting demo bằng Gemini</h1>
-    <p class="lede">Chọn món đồ và kiểu ảnh bên dưới để có câu lệnh sẵn. Mở Gemini, tải ảnh talent trước rồi đến ảnh từng món đồ theo đúng thứ tự, dán câu lệnh và gửi.</p>
+    <h1>Fitting demo bằng Gemini</h1>
+    <p class="lede">Thả ảnh talent, thả các món đồ, gõ yêu cầu. Bấm "Gửi sang Gemini" rồi dán vào Gemini là xong.</p>
   </header>
 
-  <section class="panel">
-    <h2>Các bước</h2>
-    <ol class="steps">
-      <li>Mở Gemini bằng <b>tài khoản Google công ty</b>.</li>
-      <li>Bấm dấu <b>+</b>, tải lên <b>ảnh talent trước</b>, sau đó ảnh từng món đồ theo thứ tự ở mục "Thứ tự tải ảnh".</li>
-      <li>Dán câu lệnh, gửi. Chưa ưng thì sửa tiếp trong cùng cuộc trò chuyện bằng các câu sửa nhanh bên dưới.</li>
-      <li>Mỗi look mới, mở một cuộc trò chuyện mới để kết quả không bị lẫn.</li>
-    </ol>
-    <div class="actions"><a class="btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Mở Gemini</a></div>
-  </section>
-
-  <section class="panel">
-    <h2>Soạn câu lệnh</h2>
-    <div class="field">
-      <span>Món đồ (bấm theo thứ tự bạn sẽ tải ảnh lên)</span>
-      <div class="chips" id="items"></div>
+  <div class="fit3">
+    <div class="fbox" id="boxTalent" tabindex="0" role="button" aria-label="Ô 1: chọn ảnh talent">
+      <div class="fhead"><b>Ô 1</b> Ảnh talent</div>
+      <div class="fbody" id="talentView"><div class="fhint">Kéo 1 ảnh talent vào đây<br><small>hoặc bấm để chọn · ảnh toàn thân, đứng thẳng là đẹp nhất</small></div></div>
+      <input id="talentFile" type="file" accept="image/*" hidden>
     </div>
-    <p class="order" id="order"></p>
-    <div class="grid2">
-      <label class="field" for="frame"><span>Khung hình</span>
-        <select id="frame"><option value="full">Toàn thân</option><option value="half">Nửa người (từ hông trở lên)</option></select></label>
-      <label class="field" for="pose"><span>Tư thế</span>
-        <select id="pose"><option value="keep">Giữ nguyên như ảnh talent</option><option value="34">Đứng nghiêng 3/4</option><option value="walk">Đang bước đi tự nhiên</option></select></label>
-      <label class="field" for="bg"><span>Nền</span>
-        <select id="bg"><option value="keep">Giữ nền ảnh talent</option><option value="white">Studio trắng trơn</option><option value="grey">Studio xám trơn</option><option value="outdoor">Ngoài trời, ánh sáng tự nhiên</option></select></label>
-      <label class="field" for="lang"><span>Ngôn ngữ câu lệnh</span>
-        <select id="lang"><option value="vi">Tiếng Việt</option><option value="en">English (thường ổn định hơn)</option></select></label>
+    <div class="fbox" id="boxItems" tabindex="0" role="button" aria-label="Ô 2: chọn ảnh các món đồ">
+      <div class="fhead"><b>Ô 2</b> Các món đồ <span id="itemCount"></span></div>
+      <div class="fbody" id="itemsView"><div class="fhint">Kéo tất cả ảnh đồ vào đây<br><small>quần, áo, giày, mũ, kính… mỗi ảnh một món</small></div></div>
+      <input id="itemFiles" type="file" accept="image/*" multiple hidden>
     </div>
-    <label class="field" for="note"><span>Yêu cầu thêm (không bắt buộc)</span>
-      <textarea id="note" rows="2" placeholder="Ví dụ: sơ vin áo vào quần, xắn tay áo đến khuỷu"></textarea></label>
-    <label class="field" for="prompt"><span>Câu lệnh</span>
-      <textarea id="prompt" class="prompt" readonly></textarea></label>
-    <div class="actions"><button class="primary" id="copyPrompt">Copy câu lệnh</button><span class="toast" id="copied" hidden>Đã copy</span></div>
-  </section>
+  </div>
 
-  <section class="panel">
-    <h2>Câu sửa nhanh</h2>
-    <div class="quick" id="quick"></div>
-  </section>
+  <label class="field" for="ask"><span><b class="num">Ô 3</b> Yêu cầu</span>
+    <textarea id="ask" rows="3">Cho người ở ô 1 mặc tất cả các món đồ ở ô 2.</textarea></label>
 
-  <section class="panel">
-    <h2>Để ảnh ra đẹp</h2>
+  <div class="actions">
+    <button class="primary big" id="sendGemini" disabled>Gửi sang Gemini</button>
+    <button id="resetFit" type="button">Làm lại</button>
+  </div>
+  <p class="msg" id="fitMsg" hidden></p>
+
+  <section class="panel" id="fitNext" hidden aria-live="polite">
+    <h2>Trong tab Gemini vừa mở</h2>
     <ol class="steps">
-      <li><b>Ảnh talent:</b> toàn thân, đứng thẳng, nhìn thẳng, nền đơn giản, tay không che người, mặc đồ ôm gọn.</li>
-      <li><b>Ảnh đồ:</b> mỗi ảnh một món, thấy trọn món đồ (trải phẳng, treo móc hoặc trên manocanh), không bị che hay cắt.</li>
-      <li>Gương mặt lệch hoặc màu đồ sai thì dùng câu sửa nhanh, đừng tạo lại từ đầu.</li>
+      <li>Bấm vào ô chat, nhấn <b>Ctrl+V</b> (Mac: <b>Cmd+V</b>) để dán ảnh ghép.</li>
+      <li>Quay lại đây bấm <b>Copy câu lệnh</b>, rồi dán vào Gemini và gửi.</li>
     </ol>
+    <div class="actions">
+      <button class="primary" id="copyAsk">Copy câu lệnh</button>
+      <button id="copyImg" type="button">Copy lại ảnh</button>
+      <a class="btn ghost" href="https://gemini.google.com/app" target="_blank" rel="noopener">Mở Gemini</a>
+    </div>
+    <img id="combo" alt="Ảnh ghép talent và các món đồ gửi sang Gemini">
   </section>
 
   <details class="notes">
-    <summary>Lưu ý về giới hạn và bảo mật</summary>
-    <p>Mỗi tài khoản Google có giới hạn lượt tạo ảnh mỗi ngày. Hết lượt thì chờ hôm sau.</p>
-    <p>Dùng tài khoản Google công ty để ảnh talent không bị dùng huấn luyện AI. Nếu dùng tài khoản cá nhân, tắt "Hoạt động trên các ứng dụng Gemini" trong cài đặt.</p>
-    <p>Ảnh tạo ra đủ để xem phom dáng, màu và cách phối. Hoạ tiết nhỏ, logo, chữ trên áo có thể bị lệch. Khi gửi khách, ghi rõ "ảnh demo AI".</p>
-    <p>Trang này chỉ soạn câu lệnh, không gửi ảnh hay thông tin gì đi đâu.</p>
+    <summary>Lưu ý</summary>
+    <p>Dùng tài khoản Google công ty để mở Gemini. Mỗi tài khoản có giới hạn lượt tạo ảnh mỗi ngày.</p>
+    <p>Ảnh chỉ được ghép ngay trên máy bạn. Trang không gửi ảnh đi đâu, bạn tự dán vào Gemini.</p>
+    <p>Ảnh tạo ra để xem phom dáng, màu và cách phối. Hoạ tiết nhỏ, logo có thể lệch. Gửi khách thì ghi rõ "ảnh demo AI".</p>
+    <p>Chưa ưng thì gõ tiếp trong Gemini, ví dụ: "Giữ nguyên mọi thứ, chỉ sơ vin áo vào quần" hoặc "Gương mặt phải giống hệt ảnh gốc".</p>
   </details>
 </div>
 
@@ -578,95 +585,154 @@ a.btn { display: inline-block; text-decoration: none; font-weight: 600; border-r
   function showTab() {
     const cur = tabs.includes(location.hash.slice(1)) ? location.hash.slice(1) : "nen";
     for (const t of tabs) $("tab-" + t).hidden = t !== cur;
-    document.querySelectorAll(".tab").forEach(a => a.toggleAttribute("aria-current", false) || (a.dataset.tab === cur && a.setAttribute("aria-current", "page")));
+    document.querySelectorAll(".tab").forEach(a => { if (a.dataset.tab === cur) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
     document.title = cur === "fitting" ? "Fitting demo · Viewfinder" : "Nén PPTX cho Google Slides";
   }
   window.addEventListener("hashchange", showTab); showTab();
 
-  // ----- fitting prompt builder -----
-  const ITEMS = [
-    { id: "top", vi: "áo", en: "the top" }, { id: "bottom", vi: "quần/váy", en: "the bottoms" },
-    { id: "dress", vi: "đầm/set đồ", en: "the dress/set" }, { id: "outer", vi: "áo khoác", en: "the jacket" },
-    { id: "shoes", vi: "giày", en: "the shoes" }, { id: "bag", vi: "túi", en: "the bag" },
-    { id: "acc", vi: "phụ kiện", en: "the accessory" }
-  ];
-  const LABEL = { top: "Áo", bottom: "Quần / váy", dress: "Đầm / set", outer: "Áo khoác", shoes: "Giày", bag: "Túi", acc: "Phụ kiện" };
-  let picked = ["top", "bottom"];
-  const box = $("items");
-  for (const it of ITEMS) {
-    const l = document.createElement("label"); l.className = "chip";
-    const i = document.createElement("input"); i.type = "checkbox"; i.id = "it-" + it.id; i.checked = picked.includes(it.id);
-    const sp = document.createElement("span"); sp.textContent = LABEL[it.id];
-    i.addEventListener("change", () => { picked = i.checked ? [...picked, it.id] : picked.filter(x => x !== it.id); render(); });
-    l.append(i, sp); box.append(l);
-  }
-  ["frame", "pose", "bg", "lang", "note"].forEach(id => $(id).addEventListener("input", render));
+  // ----- fitting -----
+  let talent = null;          // {file, url}
+  let items = [];             // [{file, url}]
+  let comboBlob = null;
 
-  function build() {
-    const lang = $("lang").value, items = picked.map(id => ITEMS.find(x => x.id === id));
-    if (!items.length) return "";
-    const note = $("note").value.trim(), frame = $("frame").value, pose = $("pose").value, bg = $("bg").value;
-    if (lang === "en") {
-      const list = items.map((it, i) => `image ${i + 2} is ${it.en}`).join(", ");
-      const L = [`Image 1 is the talent; ${list}.`,
-        `Create a realistic ${frame === "full" ? "full-body" : "waist-up"} fitting photo of the person in image 1 wearing ${items.length > 1 ? "all of these items styled together" : "this item"}.`,
-        `Keep the face, hairstyle and body shape exactly the same as image 1${pose === "keep" ? ", and keep the same pose" : ""}. The face must be identical, do not change any features.`,
-        `Keep each item's exact colour, pattern, fabric and construction details.`];
-      if (pose === "34") L.push("Pose: standing at a natural three-quarter angle.");
-      if (pose === "walk") L.push("Pose: walking naturally, like a street-style photo.");
-      L.push({ keep: "Keep the background and lighting from image 1.", white: "Plain white studio background, soft even lighting.", grey: "Plain grey studio background, soft even lighting.", outdoor: "Outdoor daytime setting with natural light." }[bg]);
-      if (note) L.push("Also: " + note);
-      L.push("Photorealistic, like a real photo shoot.");
-      return L.join("\n");
-    }
-    const list = items.map((it, i) => `ảnh ${i + 2} là ${it.vi}`).join(", ");
-    const L = [`Ảnh 1 là talent, ${list}.`,
-      `Tạo ảnh fitting ${frame === "full" ? "toàn thân" : "nửa người (từ hông trở lên)"}: người trong ảnh 1 mặc ${items.length > 1 ? "phối đủ các món trên" : "đúng món đồ trên"}.`,
-      `Giữ nguyên 100% gương mặt, kiểu tóc, vóc dáng${pose === "keep" ? ", tư thế" : ""} của ảnh 1. Gương mặt phải giống hệt, không thay đổi đường nét.`,
-      `Giữ đúng màu sắc, hoạ tiết, chất liệu và chi tiết may của từng món.`];
-    if (pose === "34") L.push("Tư thế đứng nghiêng 3/4, tự nhiên.");
-    if (pose === "walk") L.push("Tư thế đang bước đi tự nhiên như ảnh street style.");
-    L.push({ keep: "Giữ nguyên nền và ánh sáng của ảnh 1.", white: "Nền studio trắng trơn, ánh sáng mềm.", grey: "Nền studio xám trơn, ánh sáng mềm.", outdoor: "Bối cảnh ngoài trời ban ngày, ánh sáng tự nhiên." }[bg]);
-    if (note) L.push("Yêu cầu thêm: " + note);
-    L.push("Ảnh chân thực như ảnh chụp thật.");
-    return L.join("\n");
+  const isImg = f => f && /^image\//.test(f.type);
+  function wireBox(box, input, onFiles) {
+    box.addEventListener("click", e => { if (!e.target.closest("button")) input.click(); });
+    box.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+    box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("over"); });
+    box.addEventListener("dragleave", () => box.classList.remove("over"));
+    box.addEventListener("drop", e => { e.preventDefault(); box.classList.remove("over"); onFiles([...e.dataTransfer.files].filter(isImg)); });
+    input.addEventListener("change", () => { onFiles([...input.files].filter(isImg)); input.value = ""; });
   }
-  function render() {
-    const order = ["Ảnh 1: talent", ...picked.map((id, i) => `Ảnh ${i + 2}: ${LABEL[id].toLowerCase()}`)];
-    $("order").textContent = picked.length ? "Thứ tự tải ảnh: " + order.join(" → ") : "Chọn ít nhất một món đồ.";
-    $("prompt").value = build();
-    $("copyPrompt").disabled = !picked.length;
-  }
-  render();
-
-  async function copy(text, el) {
-    try { await navigator.clipboard.writeText(text); }
-    catch { const t = $("prompt"); if (el === "main") { t.focus(); t.select(); } }
-  }
-  $("copyPrompt").addEventListener("click", async () => {
-    await copy($("prompt").value, "main");
-    $("copied").hidden = false; setTimeout(() => { $("copied").hidden = true; }, 1800);
+  wireBox($("boxTalent"), $("talentFile"), files => { if (!files.length) return; if (talent) URL.revokeObjectURL(talent.url); talent = { file: files[0], url: URL.createObjectURL(files[0]) }; changed(); });
+  wireBox($("boxItems"), $("itemFiles"), files => { items.push(...files.map(f => ({ file: f, url: URL.createObjectURL(f) }))); changed(); });
+  // paste an image anywhere on the fitting tab: first fills Ô 1, then Ô 2
+  document.addEventListener("paste", e => {
+    if ($("tab-fitting").hidden || e.target.closest("textarea")) return;
+    const files = [...(e.clipboardData?.files || [])].filter(isImg);
+    if (!files.length) return;
+    if (!talent) { talent = { file: files.shift(), url: "" }; talent.url = URL.createObjectURL(talent.file); }
+    items.push(...files.map(f => ({ file: f, url: URL.createObjectURL(f) })));
+    changed();
+  });
+  $("resetFit").addEventListener("click", () => {
+    if (talent) URL.revokeObjectURL(talent.url); items.forEach(i => URL.revokeObjectURL(i.url));
+    talent = null; items = []; comboBlob = null; $("fitNext").hidden = true; fitMsg(""); changed();
   });
 
-  const QUICK = [
-    "Gương mặt chưa giống ảnh 1. Làm lại, gương mặt phải giống hệt người trong ảnh 1, không thay đổi đường nét.",
-    "Màu và hoạ tiết của trang phục chưa đúng. Giữ nguyên mọi thứ, chỉ sửa trang phục cho đúng màu và hoạ tiết như ảnh gốc của món đồ.",
-    "Giữ nguyên mọi thứ, chỉ sơ vin áo vào quần.",
-    "Giữ nguyên mọi thứ, chỉ đổi sang tư thế đứng nghiêng 3/4.",
-    "Giữ nguyên mọi thứ, chỉ đổi nền thành studio trắng trơn.",
-    "Giữ nguyên talent và trang phục, tạo thêm một ảnh chụp từ phía sau."
-  ];
-  for (const q of QUICK) {
-    const row = document.createElement("div"); row.className = "qrow";
-    const p = document.createElement("p"); p.textContent = q;
-    const b = document.createElement("button"); b.type = "button"; b.textContent = "Copy";
-    b.addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(q); b.textContent = "Đã copy"; }
-      catch { const r = document.createRange(); r.selectNodeContents(p); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); b.textContent = "Đã chọn chữ"; }
-      setTimeout(() => { b.textContent = "Copy"; }, 1600);
-    });
-    row.append(p, b); $("quick").append(row);
+  function changed() {
+    const tv = $("talentView");
+    tv.replaceChildren();
+    if (talent) { const im = document.createElement("img"); im.src = talent.url; im.alt = "Ảnh talent"; tv.append(im); }
+    else tv.innerHTML = '<div class="fhint">Kéo 1 ảnh talent vào đây<br><small>hoặc bấm để chọn · ảnh toàn thân, đứng thẳng là đẹp nhất</small></div>';
+    $("boxTalent").classList.toggle("has", !!talent);
+
+    const iv = $("itemsView");
+    iv.replaceChildren();
+    if (items.length) {
+      const g = document.createElement("div"); g.className = "thumbs";
+      items.forEach((it, i) => {
+        const t = document.createElement("div"); t.className = "thumb";
+        const im = document.createElement("img"); im.src = it.url; im.alt = "Món " + (i + 1);
+        const x = document.createElement("button"); x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", "Bỏ món " + (i + 1));
+        x.addEventListener("click", () => { URL.revokeObjectURL(it.url); items.splice(i, 1); changed(); });
+        t.append(im, x); g.append(t);
+      });
+      const add = document.createElement("div"); add.className = "thumb add"; add.textContent = "+"; g.append(add);
+      iv.append(g);
+    } else iv.innerHTML = '<div class="fhint">Kéo tất cả ảnh đồ vào đây<br><small>quần, áo, giày, mũ, kính… mỗi ảnh một món</small></div>';
+    $("boxItems").classList.toggle("has", items.length > 0);
+    $("itemCount").textContent = items.length ? `(${items.length} món)` : "";
+    $("sendGemini").disabled = !(talent && items.length);
+    comboBlob = null;
   }
+
+  function fitMsg(t) { const m = $("fitMsg"); m.textContent = t; m.hidden = !t; }
+
+  function fullPrompt() {
+    const ask = $("ask").value.trim() || "Cho người ở ô 1 mặc tất cả các món đồ ở ô 2.";
+    return [
+      "Ảnh đính kèm là ảnh ghép tham chiếu: bên trái (Ô 1) là người mẫu/talent, bên phải (Ô 2) là các món đồ được đánh số.",
+      "Yêu cầu: " + ask,
+      "Hãy tạo MỘT ảnh fitting mới chỉ gồm người ở Ô 1 đang mặc đồ, không có khung ghép, nhãn, số hay chữ.",
+      "Giữ nguyên 100% gương mặt, kiểu tóc, màu da và vóc dáng của người ở Ô 1. Gương mặt phải giống hệt, không thay đổi đường nét.",
+      "Giữ đúng màu sắc, hoạ tiết, chất liệu và chi tiết của từng món đồ.",
+      "Ảnh toàn thân, chân thực như ảnh chụp thật, nền studio trơn, ánh sáng mềm (trừ khi yêu cầu ở trên nói khác)."
+    ].join("\n");
+  }
+
+  async function loadBitmap(file) { return await createImageBitmap(file); }
+  function containDraw(cx, bmp, x, y, w, h) {
+    const s = Math.min(w / bmp.width, h / bmp.height);
+    const dw = bmp.width * s, dh = bmp.height * s;
+    cx.drawImage(bmp, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  }
+  function tag(cx, text, x, y, size) {
+    cx.font = `700 ${size}px "Be Vietnam Pro", Arial, sans-serif`;
+    const w = cx.measureText(text).width + size;
+    cx.fillStyle = "#0b6f96"; cx.fillRect(x, y, w, size * 1.6);
+    cx.fillStyle = "#fff"; cx.textBaseline = "middle"; cx.fillText(text, x + size / 2, y + size * 0.8);
+  }
+  async function makeCombo() {
+    const W = 2400, H = 1600, head = 90, split = 900;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const cx = c.getContext("2d");
+    cx.fillStyle = "#fff"; cx.fillRect(0, 0, W, H);
+    cx.fillStyle = "#1f1f1f"; cx.font = '700 44px "Barlow", Arial, sans-serif'; cx.textBaseline = "middle";
+    cx.fillText("Ô 1 · TALENT", 30, head / 2); cx.fillText("Ô 2 · CÁC MÓN ĐỒ", split + 30, head / 2);
+    cx.fillStyle = "#1f1f1f"; cx.fillRect(split - 2, 0, 4, H); cx.fillRect(0, head - 2, W, 4);
+    const tb = await loadBitmap(talent.file); containDraw(cx, tb, 20, head + 20, split - 40, H - head - 40); tb.close();
+    const n = items.length, cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4, rows = Math.ceil(n / cols);
+    const gw = (W - split) / cols, gh = (H - head) / rows;
+    for (let i = 0; i < n; i++) {
+      const col = i % cols, row = Math.floor(i / cols);
+      const x = split + col * gw, y = head + row * gh;
+      cx.strokeStyle = "#d9dcdf"; cx.lineWidth = 2; cx.strokeRect(x + 6, y + 6, gw - 12, gh - 12);
+      try { const b = await loadBitmap(items[i].file); containDraw(cx, b, x + 24, y + 24, gw - 48, gh - 48); b.close(); } catch {}
+      tag(cx, "Món " + (i + 1), x + 14, y + 14, 30);
+    }
+    return await new Promise(r => c.toBlob(r, "image/png"));
+  }
+
+  async function copyImage() {
+    if (!comboBlob) comboBlob = await makeCombo();
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": comboBlob })]);
+  }
+
+  $("sendGemini").addEventListener("click", async () => {
+    const btn = $("sendGemini"); btn.disabled = true; fitMsg("Đang ghép ảnh…");
+    let copied = false;
+    try {
+      const p = comboBlob ? Promise.resolve(comboBlob) : makeCombo();
+      // pass the promise straight to ClipboardItem so the click still counts as a user gesture
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": p.then(b => (comboBlob = b)) })]);
+      copied = true;
+    } catch (e) {
+      try { if (!comboBlob) comboBlob = await makeCombo(); } catch {}
+    }
+    if (comboBlob) $("combo").src = URL.createObjectURL(comboBlob);
+    $("fitNext").hidden = false;
+    if (copied) {
+      fitMsg("Đã copy ảnh ghép. Đang mở Gemini…");
+      const w = window.open("https://gemini.google.com/app", "_blank"); if (w) w.opener = null;
+      if (!w) fitMsg("Đã copy ảnh ghép. Bấm nút \"Mở Gemini\" bên dưới.");
+    } else {
+      fitMsg("Trình duyệt không cho copy ảnh. Kéo ảnh ghép bên dưới thả vào ô chat Gemini, hoặc chuột phải vào ảnh → Sao chép hình ảnh.");
+    }
+    btn.disabled = false;
+    $("fitNext").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  $("copyImg").addEventListener("click", async () => {
+    try { await copyImage(); fitMsg("Đã copy lại ảnh ghép. Dán vào Gemini bằng Ctrl+V."); }
+    catch { fitMsg("Không copy được ảnh. Kéo ảnh ghép bên dưới thả vào Gemini."); }
+  });
+  $("copyAsk").addEventListener("click", async () => {
+    const b = $("copyAsk");
+    try { await navigator.clipboard.writeText(fullPrompt()); b.textContent = "Đã copy câu lệnh"; }
+    catch { $("ask").focus(); fitMsg(fullPrompt()); b.textContent = "Copy tay đoạn bên trên"; }
+    setTimeout(() => { b.textContent = "Copy câu lệnh"; }, 2000);
+  });
+  changed();
 })();
 </script>
 </body>
